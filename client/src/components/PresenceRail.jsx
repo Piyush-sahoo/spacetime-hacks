@@ -10,37 +10,49 @@ import { idHex, key, splitQual, num, tsMs } from '../lib/util'
  * as squares against the humans' dots: an agent is a different kind of
  * participant and should never be mistaken for a colleague.
  */
+// Agent sessions accumulate for the life of the module — every heartbeat from
+// every run leaves a row. The rail is about who is working NOW, so it shows the
+// live ones and counts the rest rather than growing without bound on stage.
+const AGENT_CAP = 3
+// Same for humans: a demo room collects guests all afternoon and the rail is
+// not a guest book.
+const HUMAN_CAP = 8
+
 export default function PresenceRail() {
   const { participants, agents, meta, nodeById, covState } = useRoom()
   const online = participants.filter((p) => p.online)
-  const liveAgents = agents.filter((a) => a.online)
+  const liveAgents = agents.filter((a) => a.live)
+  const shownAgents = (liveAgents.length ? liveAgents : agents).slice(0, AGENT_CAP)
+  const otherAgents = agents.length - shownAgents.length
+  const shownHumans = participants.slice(0, HUMAN_CAP)
+  const otherHumans = participants.length - shownHumans.length
 
   return (
     <section className="panel p-3.5 sm:p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="micro-label">IN THE ROOM</span>
-        <span className="mono text-[12px]" style={{ color: 'var(--accent)' }}>
-          {online.length} human{online.length === 1 ? '' : 's'}
-          {liveAgents.length ? ` · ${liveAgents.length} agent${liveAgents.length === 1 ? '' : 's'}` : ''}
+        <span className="mono text-[11.5px] whitespace-nowrap" style={{ color: 'var(--accent)' }}>
+          {online.length}&nbsp;human{online.length === 1 ? '' : 's'}
+          {liveAgents.length ? ` · ${liveAgents.length}\u00a0agent${liveAgents.length === 1 ? '' : 's'}` : ''}
         </span>
       </div>
 
       {/* ── agents ─────────────────────────────────────────────────────── */}
       {agents.length > 0 ? (
         <ul className="flex lg:flex-col gap-2 mb-3 overflow-x-auto lg:overflow-visible no-scrollbar -mx-1 px-1">
-          {agents.map((a) => (
+          {shownAgents.map((a) => (
             <li
               key={key(a.id)}
               className="flex items-center gap-2.5 shrink-0 lg:shrink rounded-lg px-2.5 py-2 min-w-0"
               style={{
-                background: a.online ? 'rgba(14,116,144,0.10)' : 'transparent',
-                border: `1px solid ${a.online ? 'rgba(14,116,144,0.32)' : 'var(--line)'}`,
+                background: a.live ? 'rgba(14,116,144,0.10)' : 'transparent',
+                border: `1px solid ${a.live ? 'rgba(14,116,144,0.32)' : 'var(--line)'}`,
               }}
             >
               <span
                 className="w-6 h-6 rounded-[5px] shrink-0 flex items-center justify-center"
                 style={{
-                  background: a.online ? 'var(--signal-ink)' : 'rgba(22,20,19,0.15)',
+                  background: a.live ? 'var(--signal-ink)' : 'rgba(22,20,19,0.15)',
                   color: 'var(--cream)',
                 }}
               >
@@ -52,7 +64,7 @@ export default function PresenceRail() {
                   <span className="micro-label ml-1.5" style={{ color: 'var(--signal-ink)' }}>AGENT</span>
                 </span>
                 <span className="block mono text-[11px] truncate max-w-[170px]" style={{ color: 'var(--muted)' }}>
-                  {a.online ? `${num(a.touches)} touches` : 'idle'}
+                  {a.live ? `${num(a.touches)} touches` : `idle · ${num(a.touches)} touches`}
                   {a.session ? ` · ${String(a.session).slice(0, 6)}` : ''}
                 </span>
               </span>
@@ -73,13 +85,17 @@ export default function PresenceRail() {
         </div>
       )}
 
+      {otherAgents > 0 && (
+        <p className="micro-label -mt-1 mb-3">+{otherAgents} EARLIER AGENT SESSION{otherAgents === 1 ? '' : 'S'}</p>
+      )}
+
       {participants.length === 0 && (
         <p className="text-[13px]" style={{ color: 'var(--muted)' }}>waiting for the first participant row…</p>
       )}
 
       {/* ── humans ─────────────────────────────────────────────────────── */}
       <ul className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible no-scrollbar -mx-1 px-1">
-        {participants.map((p) => {
+        {shownHumans.map((p) => {
           const hex = idHex(p.identity)
           const me = hex === meta.identity
           const focus = p.focusNode && key(p.focusNode) !== '0' ? nodeById(p.focusNode) : null
@@ -107,6 +123,10 @@ export default function PresenceRail() {
           )
         })}
       </ul>
+
+      {otherHumans > 0 && (
+        <p className="micro-label mt-2">+{otherHumans} MORE</p>
+      )}
 
       {liveAgents.length > 0 && (
         <p className="micro-label mt-3 flex items-center gap-1.5" style={{ color: 'var(--signal-ink)' }}>

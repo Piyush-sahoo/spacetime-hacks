@@ -8,6 +8,9 @@ import { ROOM_SLUG, WALK_K, STEP_MS, STALL_TAKEOVER_MS } from './config'
 import { key, idHex, cmpBig, asBig, tsMs } from './util'
 import { buildTerritory } from './territory'
 
+// How recently an agent_session must have reported to count as working now.
+const AGENT_LIVE_MS = 120000
+
 const Ctx = createContext(null)
 export const useRoom = () => useContext(Ctx)
 
@@ -203,12 +206,24 @@ export function RoomProvider({ children }) {
     [requestRows]
   )
 
+  // An `agent_session` row stays `online` until something flips it, and a crashed
+  // or finished run never does. Treat a session as live only if it has also
+  // reported inside AGENT_LIVE_MS — otherwise the room claims a dozen agents are
+  // working when none of them are. `tick` re-evaluates that on a slow interval.
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 10000)
+    return () => clearInterval(t)
+  }, [])
+
   const agents = useMemo(() => {
     const rid = repo ? key(repo.id) : null
+    const now = Date.now()
     return store.rows('agent_session')
       .filter((a) => !rid || key(a.repoId) === rid)
-      .sort((a, b) => (b.online === a.online ? tsMs(b.lastAt) - tsMs(a.lastAt) : b.online ? 1 : -1))
-  }, [v, repo]) // eslint-disable-line
+      .map((a) => ({ ...a, live: !!a.online && now - tsMs(a.lastAt) < AGENT_LIVE_MS }))
+      .sort((a, b) => (b.live === a.live ? tsMs(b.lastAt) - tsMs(a.lastAt) : b.live ? 1 : -1))
+  }, [v, repo, tick]) // eslint-disable-line
 
   const requestExploration = useCallback((nodeId, note) => {
     if (!apiRef.current || !repo) return Promise.resolve()

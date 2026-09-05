@@ -12,7 +12,7 @@ export default function CoverageStrip() {
   const { exploredNodes, totalNodes, exploredFiles, totalFiles } = coverage
   const pct = totalNodes ? (exploredNodes / totalNodes) * 100 : 0
   const dark = Math.max(0, totalNodes - exploredNodes)
-  const liveAgents = agents.filter((a) => a.online)
+  const liveAgents = agents.filter((a) => a.live)
 
   return (
     <section className="panel px-4 sm:px-6 py-3.5 sm:py-4">
@@ -36,8 +36,10 @@ export default function CoverageStrip() {
           <div className="micro-label">
             {covState === 'live'
               ? liveAgents.length
-                ? `${liveAgents.length} AGENT${liveAgents.length === 1 ? '' : 'S'} REPORTING`
-                : 'COVERAGE FEED LIVE'
+                ? `${liveAgents.length} AGENT${liveAgents.length === 1 ? '' : 'S'} REPORTING NOW`
+                : agents.length
+                  ? 'COVERAGE FEED LIVE · NO AGENT REPORTING'
+                  : 'COVERAGE FEED LIVE'
               : covState === 'connecting'
                 ? 'SUBSCRIBING…'
                 : 'COVERAGE FEED OFFLINE'}

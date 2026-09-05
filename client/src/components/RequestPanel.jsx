@@ -1,7 +1,6 @@
 import { HelpCircle, Loader2, CheckCircle2, Hand } from 'lucide-react'
 import { useRoom } from '../lib/room.jsx'
 import { key, idHex, tsMs } from '../lib/util'
-import { prettyPath, moduleOf } from '../lib/territory'
 
 /**
  * The return path, as a queue.
@@ -81,7 +80,9 @@ export default function RequestPanel() {
           const Icon = s.icon
           const who = participants.find((p) => idHex(p.identity) === idHex(r.askedBy))
           const mine = idHex(r.askedBy) === meta.identity
-          const path = r.path || prettyPath(moduleOf(''))
+          // The module resolves the path server-side; if it could not, say so
+          // rather than inventing a filename.
+          const path = r.path || r.note || `node ${key(r.nodeId)}`
           return (
             <li
               key={key(r.id)}
