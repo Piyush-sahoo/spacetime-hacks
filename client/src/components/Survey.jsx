@@ -595,7 +595,7 @@ export default function Survey() {
   }
 
   return (
-    <section className="panel-dark overflow-hidden flex flex-col">
+    <section className="panel-dark overflow-hidden flex flex-col min-w-0">
       <div className="px-3.5 sm:px-5 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="micro-label flex items-center gap-1.5" style={{ color: 'rgba(250,249,246,0.5)' }}>

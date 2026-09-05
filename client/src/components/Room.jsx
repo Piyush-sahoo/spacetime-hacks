@@ -99,7 +99,7 @@ export default function Room({ onLeave }) {
       )}
 
       <main className="flex-1 px-4 sm:px-6 py-4 sm:py-5">
-        <div className="max-w-[1500px] mx-auto grid gap-4 lg:gap-5 lg:grid-cols-[236px_minmax(0,1fr)] items-start">
+        <div className="max-w-[1500px] mx-auto grid gap-4 lg:gap-5 lg:grid-cols-[236px_minmax(0,1fr)] items-start [&>*]:min-w-0">
           <div className="lg:sticky lg:top-4 space-y-4 min-w-0">
             <PresenceRail />
             <div className="hidden lg:block"><PriorNote /></div>
@@ -126,7 +126,7 @@ export default function Room({ onLeave }) {
 
             {view === 'coverage' ? (
               <div className="space-y-4">
-                <div className="grid gap-4 lg:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
+                <div className="grid gap-4 lg:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] items-start [&>*]:min-w-0">
                   <Survey />
                   <div className="space-y-4">
                     <RequestPanel />
@@ -140,7 +140,7 @@ export default function Room({ onLeave }) {
                 {walkDone && <Verdict />}
               </div>
             ) : (
-              <div className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">
+              <div className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start [&>*]:min-w-0">
                 <NodeList />
                 <div ref={walkRef} className="space-y-4 scroll-mt-4">
                   <WalkView />
