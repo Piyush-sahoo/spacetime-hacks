@@ -68,53 +68,69 @@ Give the subagent a prompt shaped like this:
 If the request carries a note, the note is the human's actual question — answer
 *that* specifically, not just the generic summary.
 
-### 3. Complete it — as points, never a paragraph
+The subagent gathers the technical detail. You do not pass that detail through —
+you translate it in step 3.
 
-The findings render as a list on the human's map, next to a dozen other rows.
-They have five seconds and a narrow column. A dense 150-word paragraph is good
-content arriving in the wrong shape: it reads as a wall and gets skipped.
+### 3. Complete it — 2-3 plain-language lines, never more
 
-So write **3-5 short lines, one fact per line, each starting with a verb**. One
-newline between lines — the line breaks ARE the structure, and the panel splits
-on them. No preamble, no restating the question, no markdown headings, no
-bullet characters (the panel adds its own).
+The person reading this does not write code. They are looking at a narrow column
+next to a dozen other rows, and they have about five seconds. Your job is not to
+prove you read the file. It is to tell them what the file is *for*.
 
-Put the single most useful fact first and any risk last. Keep each line under
-about 120 characters; specific numbers and names are what make a line worth its
-row, so keep them.
+Write **2 or 3 short lines. Never more.** One idea per line, each starting with a
+verb. One newline between lines — the line breaks ARE the structure, and the
+panel splits on them. No preamble, no markdown headings, no bullet characters
+(the panel adds its own).
+
+- **Line 1** — what this file is for, in one sentence.
+- **Line 2** — the one thing worth knowing about it.
+- **Line 3** — only if it genuinely earns its place: a risk or a surprise, in
+  plain words. Two good lines beat three with filler.
+
+**Plain language, strictly.** No function or API names, no config keys, no file
+sizes, no line counts, no framework or tooling jargon, no acronyms. If a term
+would not survive being read aloud to someone who does not code, it does not go
+in. Say what it is FOR, not what it contains: "sets up how the app is built"
+beats "one defineConfig call, no conditionals".
+
+Keep each line under about 100 characters.
 
 This is the shape:
 
 ```
-Read config.js — 32 lines, constants only, no logic.
-Exports STDB_URI, ROOM_SLUG, WALK_K, PRIOR.
-ROOM_SLUG reads ?repo= so one deploy serves every repo.
-Risk: WALK_K and PRIOR duplicate module/src/index.ts with nothing enforcing it.
+Sets up how the app gets built and served.
+Written so the site works from any web address without extra setup.
+Ships the whole app as one big file, which makes the first load slower than it needs to be.
 ```
 
-Not this shape:
+Not this shape — too technical, and too long:
 
 ```
-I explored the config file as requested. It turns out that config.py does not
-exist; the file is actually config.js, which is 32 lines long and contains only
-constants with zero logic and no imports. Its exports are STDB_URI and ...
+Read client/vite.config.js — 9 lines, one defineConfig call, no conditionals.
+Loads only @vitejs/plugin-react; nothing else touches the build.
+Sets base './' so dist/ works from any path, which is why the Vercel deploy needs no rewrite rules.
+Opens server and preview with host: true — that is what lets a phone on the LAN hit the dev server.
+Risk: no build.outDir or manualChunks, so the 429 kB bundle ships as one chunk and stays unsplit.
 ```
+
+Five lines is a wall, and `defineConfig`, `manualChunks` and `429 kB` are noise
+to the person reading. Same file, same truth — the good version just says it in
+words they already know.
 
 Pass it with a real newline in the string. A quoted heredoc keeps the breaks
 intact through the shell:
 
 ```bash
 python3 "$CLAUDE_PLUGIN_ROOT/scripts/map_room_cli.py" complete <request_id> "$(cat <<'EOF'
-Read config.js — 32 lines, constants only, no logic.
-Exports STDB_URI, ROOM_SLUG, WALK_K, PRIOR.
-ROOM_SLUG reads ?repo= so one deploy serves every repo.
-Risk: WALK_K and PRIOR duplicate module/src/index.ts with nothing enforcing it.
+Sets up how the app gets built and served.
+Written so the site works from any web address without extra setup.
+Ships the whole app as one big file, which makes the first load slower than it needs to be.
 EOF
 )"
 ```
 
-A single-line finding still works for a one-fact answer — one line is one point.
-What does not work is four facts welded into one line.
+A single line is fine when there is only one thing worth saying. What does not
+work is three ideas welded into one line, or a third line that adds nothing.
 
 ### 4. Tell the user
 
@@ -142,8 +158,9 @@ python3 "$CLAUDE_PLUGIN_ROOT/scripts/map_room_cli.py" coverage    # explored vs 
   saying exactly that.
 - **Never fabricate findings.** Read the code. The whole point of the map is
   that it distinguishes what was actually looked at from what was not.
-- **Report in points, not prose.** 3-5 lines, one fact each, newline separated.
-  The panel splits on the newlines; a paragraph arrives as a wall and is skipped.
+- **Report in plain language, 2-3 lines, never more.** One idea per line,
+  newline separated. No jargon, no API names, no file sizes — the reader does
+  not write code. The panel splits on the newlines.
 - **The user's own prompt still comes first.** A pending request is not an
   interrupt. If the user asked for something else, mention the request and ask
   whether to handle it now.

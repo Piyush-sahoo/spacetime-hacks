@@ -3,7 +3,7 @@
 
     map_room_cli.py pending
     map_room_cli.py claim <request_id> [agent_name]
-    map_room_cli.py complete <request_id> "findings"   (3-5 lines, newline separated)
+    map_room_cli.py complete <request_id> "findings"   (2-3 plain lines, newline separated)
     map_room_cli.py complete <request_id> -             read the findings from stdin
     map_room_cli.py coverage
     map_room_cli.py doctor
