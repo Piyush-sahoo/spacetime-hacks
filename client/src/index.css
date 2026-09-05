@@ -17,6 +17,16 @@
   --accent: #ff571a;
   --danger: #c02618;
   --good: #2f6b46;
+
+  /* v2 — the coverage loop needs exactly three more semantics, and no more:
+     asked (amber), an agent working (cyan), reported back (green). `-ink`
+     variants are the same hue darkened enough to sit on paper. */
+  --ember: #ff7424;
+  --ask: #ffd166;
+  --ask-ink: #a06a06;
+  --signal: #35d0ff;
+  --signal-ink: #0e7490;
+  --done: #7ddb9a;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -176,4 +186,51 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .hop-cell, .hop-live, .verdict-in, .status-dot, .sweep::after { animation: none; }
+}
+
+
+/* ── the coverage map ─────────────────────────────────────────────────────
+   Everything below animates a state that arrived over a subscription. None of
+   it is triggered by a local click, which is what keeps two tabs identical. */
+
+/* a region lighting up for the first time */
+@keyframes cell-bloom {
+  0%   { box-shadow: 0 0 0 0 rgba(255,116,36,0.85); filter: brightness(2.1); }
+  60%  { box-shadow: 0 0 0 9px rgba(255,116,36,0); filter: brightness(1.25); }
+  100% { box-shadow: 0 0 0 0 rgba(255,116,36,0); filter: none; }
+}
+.cell-bloom { animation: cell-bloom 1.5s cubic-bezier(0.16, 1, 0.3, 1) both; z-index: 4; }
+
+/* asked for, not yet picked up */
+@keyframes ask-pulse {
+  0%, 100% { outline-color: var(--ask); opacity: 1; }
+  50%      { outline-color: rgba(255,209,102,0.28); opacity: 0.72; }
+}
+.cell-pending { outline-style: dashed !important; animation: ask-pulse 1.4s ease-in-out infinite; }
+
+/* an agent is inside it right now */
+@keyframes claim-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(53,208,255,0.55); }
+  100% { box-shadow: 0 0 0 10px rgba(53,208,255,0); }
+}
+.cell-claimed { animation: claim-pulse 1.2s ease-out infinite; }
+
+/* it came back */
+@keyframes done-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(125,219,154,0.8); }
+  100% { box-shadow: 0 0 0 12px rgba(125,219,154,0); }
+}
+.cell-done { animation: done-flash 1.8s ease-out 2; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin-slow { animation: spin 1.6s linear infinite; }
+
+@keyframes req-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.req-row { animation: req-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell-bloom, .cell-pending, .cell-claimed, .cell-done, .spin-slow, .req-row { animation: none; }
 }

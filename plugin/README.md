@@ -149,7 +149,9 @@ aggregate (`SELECT COUNT(*) AS n FROM touch`).
 
 ## Debugging
 
-Both hooks take `--debug`, which makes them synchronous and loud:
+`post_tool_use.py` takes `--debug`, which makes the reducer call synchronous
+and prints what it extracted. `user_prompt_submit.py` always prints its JSON,
+so just pipe a payload into it:
 
 ```bash
 echo '{"session_id":"s1","cwd":"'"$PWD"'","hook_event_name":"PostToolUse",

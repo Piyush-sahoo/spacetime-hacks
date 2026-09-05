@@ -44,6 +44,7 @@ import IngestNodesReducer from "./ingest_nodes_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import ReportTouchReducer from "./report_touch_reducer";
 import RequestExplorationReducer from "./request_exploration_reducer";
+import ResetCoverageReducer from "./reset_coverage_reducer";
 import SetFocusReducer from "./set_focus_reducer";
 import StartWalkReducer from "./start_walk_reducer";
 import StepWalkReducer from "./step_walk_reducer";
@@ -247,6 +248,7 @@ const reducersSchema = __reducers(
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("report_touch", ReportTouchReducer),
   __reducerSchema("request_exploration", RequestExplorationReducer),
+  __reducerSchema("reset_coverage", ResetCoverageReducer),
   __reducerSchema("set_focus", SetFocusReducer),
   __reducerSchema("start_walk", StartWalkReducer),
   __reducerSchema("step_walk", StepWalkReducer),

@@ -896,3 +896,25 @@ export const complete_request = spacetimedb.reducer(
     ctx.db.exploration_request.id.update({ ...r, status: 'done', result });
   }
 );
+
+/**
+ * Wipe the coverage feed for ONE repo so a demo can be run again from dark.
+ *
+ * Touches only v2 tables — `node`, `edge`, `walk`, `frontier` and `verdict` are
+ * never read or written here, so the loaded graphs and the v1 walk are safe.
+ */
+export const reset_coverage = spacetimedb.reducer(
+  { name: 'reset_coverage' },
+  { repo_id: t.u64() },
+  (ctx, { repo_id }) => {
+    ctx.db.node_cov.repo_id.delete(repo_id);
+    ctx.db.touch.repo_id.delete(repo_id);
+    ctx.db.path_cache.repo_id.delete(repo_id);
+    ctx.db.exploration_request.repo_id.delete(repo_id);
+    const ids: bigint[] = [];
+    for (const s of ctx.db.agent_session.iter()) {
+      if (s.repo_id === repo_id) ids.push(s.id);
+    }
+    for (const id of ids) ctx.db.agent_session.id.delete(id);
+  }
+);
