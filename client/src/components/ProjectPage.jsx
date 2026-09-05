@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichRepoOverHttp, parseEnrich, watchDirectory } from '../lib/live'
+import { enrichRepoOverHttp, parseEnrich, watchDirectory, rememberedKey, rememberKey } from '../lib/live'
 import {
   baseLink, isLiveSession, liveAgentCount, millis, projectsLink, sessionLink,
 } from '../lib/funnel'
@@ -370,7 +370,9 @@ const ENRICH_BATCH = 20
  * honest measure of how much of the wiring this actually found.
  */
 function Deepen({ repo }) {
-  const [apiKey, setApiKey] = useState('')
+  // Remembered in this browser, so it is typed once and every repo added after
+  // this one deepens itself as part of being added.
+  const [apiKey, setApiKey] = useState(() => rememberedKey())
   const [busy, setBusy] = useState(false)
   const [st, setSt] = useState(null)
   const stop = useRef(false)
@@ -382,6 +384,7 @@ function Deepen({ repo }) {
   const total = Number(repo.nodeCount ?? repo.node_count ?? 0)
 
   const run = async (startAt) => {
+    rememberKey(apiKey)
     stop.current = false
     setBusy(true)
     let off = Number(startAt) || 0
