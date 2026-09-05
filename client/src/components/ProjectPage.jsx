@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { watchDirectory } from '../lib/live'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { enrichRepoOverHttp, parseEnrich, watchDirectory } from '../lib/live'
 import {
   baseLink, isLiveSession, liveAgentCount, millis, projectsLink, sessionLink,
 } from '../lib/funnel'
@@ -127,6 +127,8 @@ export default function ProjectPage({ slug }) {
         written into every reported tool call, so the link needs nothing new — it
         exists the moment your session does.
       </p>
+
+      <Deepen repo={repo} />
 
       {/* ── the walkthrough ────────────────────────────────────────────── */}
       <h2>Put your own agent on it — six steps</h2>
@@ -343,6 +345,171 @@ export default function ProjectPage({ slug }) {
         </button>
       </div>
     </Shell>
+  )
+}
+
+/** Files per call. Small enough that a batch answers in about four seconds. */
+const ENRICH_BATCH = 20
+
+/**
+ * Deepen this map — the second pass, driven from here rather than at index time.
+ *
+ * Indexing reads a repo's file TREE and is instant. That is what makes pasting a
+ * URL feel free, and it is also what leaves the map thin: one node per file, and
+ * the only edges directory containment, so every block stands the same height
+ * and an impact walk traverses FOLDERS rather than dependencies.
+ *
+ * This reads the file CONTENTS. It is opt-in, batched, and resumable on
+ * `offset`, so django/django's 2,975 files are a thing you can start, watch, and
+ * stop — and nobody who pastes a large repo pays for it without asking.
+ *
+ * The import edges come from a REGEX and are written with no model involved at
+ * all: the key box is optional and only ever buys the one-sentence summaries.
+ * That is why the resolution counters are on screen rather than in a log — an
+ * import that resolved to nothing was DROPPED, and the count of those is the
+ * honest measure of how much of the wiring this actually found.
+ */
+function Deepen({ repo }) {
+  const [apiKey, setApiKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [st, setSt] = useState(null)
+  const stop = useRef(false)
+
+  useEffect(() => () => { stop.current = true }, [])
+
+  if (!repo) return null
+
+  const total = Number(repo.nodeCount ?? repo.node_count ?? 0)
+
+  const run = async (startAt) => {
+    stop.current = false
+    setBusy(true)
+    let off = Number(startAt) || 0
+    const acc = {
+      offset: off, total, done: 0, skipped: 0, imports: 0,
+      seen: 0, resolved: 0, unresolved: 0, ambiguous: 0, llm: '', error: null,
+    }
+    try {
+      for (;;) {
+        const r = parseEnrich(await enrichRepoOverHttp(repo.id, off, ENRICH_BATCH, apiKey))
+        if (!r.ok) { acc.error = r.error; break }
+        acc.done += Number(r.done) || 0
+        acc.skipped += Number(r.skipped) || 0
+        acc.imports += Number(r.imports) || 0
+        acc.seen += Number(r.seen) || 0
+        acc.resolved += Number(r.resolved) || 0
+        acc.unresolved += Number(r.unresolved) || 0
+        acc.ambiguous += Number(r.ambiguous) || 0
+        acc.total = Number(r.total) || acc.total
+        acc.llm = String(r.llm || '')
+        off = Number(r.next) || (off + ENRICH_BATCH)
+        acc.offset = off
+        setSt({ ...acc })
+        if (stop.current) break
+        if (!Number(r.done)) break
+        if (off >= acc.total) break
+      }
+    } catch (e) {
+      acc.error = String(e?.message || e)
+    }
+    setSt({ ...acc })
+    setBusy(false)
+  }
+
+  const pct = st && st.total ? Math.min(100, Math.round((st.offset / st.total) * 100)) : 0
+  const rate = st && st.seen ? Math.round((st.resolved / st.seen) * 100) : 0
+  const finished = !!st && !busy && !st.error && st.offset >= st.total
+
+  return (
+    <>
+      <h2>Deepen this map</h2>
+      <p>
+        Indexing read this repository's file <strong>tree</strong> — every path,
+        in about three seconds, which is why it was free. It did not read a
+        single file. So every block on the map stands at the same height, and
+        the only edges are which folder a file is in.
+      </p>
+      <p>
+        This reads the files. It writes one <code>IMPORTS</code> edge for every
+        import statement that resolves to another file in this repository, and
+        it counts the functions and classes in each one so the blocks stand at
+        different heights. <strong>The edges come from a regular expression, not
+        from a model</strong> — an import it cannot resolve is dropped and
+        counted, never guessed.
+      </p>
+
+      <div className="fn-warn">
+        <span className="fn-k">Optional — one-sentence descriptions</span>
+        <p style={{ margin: '0 0 8px' }}>
+          Leave this empty and everything above still happens. A key only buys
+          the sentence that says what each file <em>does</em>, which is the one
+          thing a regular expression cannot write. It is sent straight to the
+          database as a procedure argument and is never stored anywhere.
+        </p>
+        <input
+          type="password"
+          className="ctl"
+          style={{ width: '100%', fontFamily: 'inherit' }}
+          placeholder="OpenAI API key (optional)"
+          value={apiKey}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+      </div>
+
+      <div className="actions">
+        <button type="button" className="ctl primary" disabled={busy} onClick={() => run(0)}>
+          {busy ? 'Reading files…' : 'Deepen this map'}
+        </button>
+        {st && !busy && st.offset > 0 && st.offset < st.total ? (
+          <button type="button" className="ctl" onClick={() => run(st.offset)}>
+            Resume from {st.offset}
+          </button>
+        ) : null}
+        {busy ? (
+          <button type="button" className="ctl" onClick={() => { stop.current = true }}>
+            Stop after this batch
+          </button>
+        ) : null}
+      </div>
+
+      {st ? (
+        <div className="fn-note" style={{ marginTop: 10 }}>
+          <div
+            aria-hidden
+            style={{
+              height: 6, borderRadius: 3, background: 'rgba(127,127,127,.25)',
+              overflow: 'hidden', marginBottom: 8,
+            }}
+          >
+            <div style={{ width: `${pct}%`, height: '100%', background: 'currentColor', opacity: 0.7 }} />
+          </div>
+          <p style={{ margin: 0 }}>
+            <strong>{st.offset.toLocaleString()}</strong> of{' '}
+            <strong>{st.total.toLocaleString()}</strong> files ({pct}%) ·{' '}
+            <strong>{st.imports.toLocaleString()}</strong> import edges written
+            {st.skipped > 0 ? <> · {st.skipped} file{st.skipped === 1 ? '' : 's'} could not be fetched</> : null}
+          </p>
+          <p style={{ margin: '6px 0 0' }} className="fn-why">
+            {st.seen.toLocaleString()} import statements read ·{' '}
+            {st.resolved.toLocaleString()} resolved to a file in this repository ({rate}%) ·{' '}
+            {st.unresolved.toLocaleString()} pointed outside it and were dropped
+            {st.ambiguous > 0 ? <> · {st.ambiguous} were too ambiguous to be evidence of anything</> : null}.
+            {st.llm ? <> Descriptions: <code>{st.llm}</code>.</> : null}
+          </p>
+          {st.error ? (
+            <p className="fn-bad" style={{ margin: '8px 0 0' }}>{st.error}</p>
+          ) : null}
+          {finished ? (
+            <p style={{ margin: '8px 0 0' }}>
+              Done. Open the map — the tall blocks are the files with the most in
+              them, and hovering one now shows what it is actually wired to.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   )
 }
 

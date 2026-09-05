@@ -74,6 +74,20 @@ export function codeAt(i) {
 const heightOf = (count) => 16 + Math.min(66, Math.round(Math.log2(1 + Math.max(1, count)) * 13))
 
 /**
+ * What a block is a block OF.
+ *
+ * `symbols` is what `enrich_repo` counted inside the file; it is null until
+ * somebody deepens the map, and then it is the node count — which is a real
+ * per-function count on a seeded graph, and 1 on an indexed one, which is
+ * precisely why every block on an indexed repo used to stand the same height.
+ *
+ * Height is the ONLY thing that reads it. Districts are packed on how many
+ * FILES they hold and ordered alphabetically, both untouched by this, so a
+ * file getting taller cannot move a single footprint.
+ */
+const sizeOf = (f) => Number(f.symbols ?? f.count ?? 0)
+
+/**
  * Pack rectangles around the origin, biggest first, by growing a bounding box
  * outward one side at a time: right column, bottom row, left column, top row,
  * repeat. Deterministic, O(n), and it puts the repo's centre of mass in the
@@ -157,7 +171,7 @@ export function buildAtlas(files) {
     if (!d) { d = { name: dir, files: [], count: 0, symbols: 0 }; dm.set(dir, d) }
     d.files.push(fi)
     d.count += 1
-    d.symbols += Number(list[fi].count || 0)
+    d.symbols += sizeOf(list[fi])
   }
   const districts = [...dm.values()].sort(
     (a, b) => (b.count - a.count) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
@@ -196,13 +210,20 @@ export function buildAtlas(files) {
         gy: d.gy + 1 + row * CELL,
         w: BW,
         d: BW,
-        h: heightOf(f.count),
+        h: heightOf(sizeOf(f)),
         kind: kindOfDir(d.name),
         name: f.label || f.mod,
         short: shortLabel(f.label || f.mod),
         path: f.path,
         mod: f.mod,
-        count: Number(f.count || 0),
+        // The tooltip says "N symbols", so it has to BE the symbol count once
+        // one is known. Coverage fractions read territory's `f.count`, which
+        // is still the node count, so nothing that divides is touched.
+        count: sizeOf(f),
+        nodes: Number(f.count || 0),
+        loc: Number(f.loc || 0),
+        summary: f.summary || '',
+        role: f.role || '',
       }
       byFile.set(fi, blocks.length)
       blocks.push(b)

@@ -125,6 +125,29 @@ export async function connectLive(store) {
         if (typeof fn !== 'function') return indexRepoOverHttp(owner, repo)
         return fn.call(conn.procedures, { owner, repo, githubToken: '' })
       },
+      /**
+       * Deepen an existing map: real import edges, and a real size for every
+       * block. Separate from `indexRepo` on purpose — indexing reads the file
+       * TREE and is instant, this reads the file CONTENTS and is not, and
+       * nobody who pastes a 3,000-file repo should pay for that unasked.
+       *
+       * Resumable: `offset` walks the repo's file nodes in id order, so the
+       * caller drives batches and can stop whenever it likes. `apiKey` is
+       * optional — with '' the regex half still runs, which is the half that
+       * writes the import edges and the block heights.
+       */
+      enrichRepo: (repoId, offset, limit, apiKey) => {
+        const fn = conn?.procedures?.enrichRepo || conn?.procedures?.enrich_repo
+        if (typeof fn !== 'function') {
+          return Promise.reject(new Error('enrich_repo is not published on this module'))
+        }
+        return fn.call(conn.procedures, {
+          repoId,
+          offset: Number(offset) || 0,
+          limit: Number(limit) || 20,
+          apiKey: apiKey || '',
+        })
+      },
       requestExploration: (repoId, nodeId, note) => {
         const fn = reducerFor(conn, 'request_exploration')
         if (!fn) return Promise.reject(new Error('request_exploration is not published yet'))
@@ -231,6 +254,48 @@ export async function indexRepo(owner, repo) {
     if (e instanceof TypeError) return indexRepoOverSocket(owner, repo)
     throw e
   }
+}
+
+/**
+ * `enrich_repo` over plain HTTP, for a page that never opens a socket.
+ *
+ * Positional argument array, exactly as CONTRACT-V2 records: u64/u32 args are
+ * JSON NUMBERS, not strings. Returns the procedure's own progress line.
+ */
+export async function enrichRepoOverHttp(repoId, offset, limit, apiKey) {
+  const url = `${httpBase()}/v1/database/${STDB_MODULE}/call/enrich_repo`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([Number(repoId), Number(offset) || 0, Number(limit) || 20, apiKey || '']),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`the database refused the request (HTTP ${res.status})`)
+  try {
+    const parsed = JSON.parse(text)
+    return typeof parsed === 'string' ? parsed : text
+  } catch {
+    return text
+  }
+}
+
+/**
+ * Parse `ok offset=0 done=20 total=70 …` into something a progress bar can use.
+ * A line that does not start `ok` is an error the caller has to show, not hide.
+ */
+export function parseEnrich(line) {
+  const s = String(line || '')
+  if (!s.startsWith('ok ')) return { ok: false, error: s || 'no answer' }
+  const out = { ok: true, raw: s }
+  for (const part of s.split(/\s+/)) {
+    const i = part.indexOf('=')
+    if (i <= 0) continue
+    const k = part.slice(0, i)
+    const v = part.slice(i + 1)
+    const n = Number(v.replace('%', ''))
+    out[k] = Number.isFinite(n) && v !== '' ? n : v
+  }
+  return out
 }
 
 /**

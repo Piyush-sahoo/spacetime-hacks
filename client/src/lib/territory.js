@@ -52,10 +52,19 @@ export function districtOf(mod) {
 
 /**
  * nodes -> { files, districts, byNode }
- *   files[i]  = { mod, path, label, district, ids, count, pick }
+ *   files[i]  = { mod, path, label, district, ids, count, symbols, pick }
  *   byNode    = Map(nodeIdString -> file index)
  *   `pick` is the node id a click sends to `request_exploration`: the lowest id
  *   in the file, so every tab naming the same region names the same row.
+ *
+ * `count` is the number of GRAPH NODES in the file and stays that, because it
+ * is the denominator every coverage fraction on screen divides by, and the
+ * number the districts are packed and ordered on.
+ *
+ * `symbols` is what `enrich_repo` actually measured inside the file, and it is
+ * `null` for a file nothing has enriched. It is a SEPARATE field for exactly
+ * that reason: block height reads it, and nothing else does, so a file getting
+ * taller can never move a footprint or re-scale a coverage bar.
  */
 /**
  * Nodes minted by `report_touch` for a path the survey does not hold. They are
@@ -65,14 +74,14 @@ export function districtOf(mod) {
  */
 export const NEW_LAND_KIND = 'NewLand'
 
-export function buildTerritory(nodes) {
+export function buildTerritory(nodes, meta) {
   const files = new Map()
   for (const n of nodes) {
     if (n.kind === NEW_LAND_KIND) continue
     const mod = moduleOf(n.qual)
     let f = files.get(mod)
     if (!f) {
-      f = { mod, path: prettyPath(mod), label: labelOf(mod), district: districtOf(mod), ids: [], count: 0, pick: null, tests: 0 }
+      f = { mod, path: prettyPath(mod), label: labelOf(mod), district: districtOf(mod), ids: [], count: 0, symbols: null, loc: 0, summary: '', role: '', importance: 0, pick: null, tests: 0 }
       files.set(mod, f)
     }
     f.ids.push(n.id)
@@ -87,6 +96,30 @@ export function buildTerritory(nodes) {
     f.pick = f.ids[0]
     for (const id of f.ids) byNode.set(String(id), i)
   })
+
+  // What `enrich_repo` read out of the file itself. Absent until somebody
+  // deepens the map, and absent is `null` rather than 0 — a file nobody has
+  // opened is UNKNOWN, and it stands at its node count, not on the floor.
+  if (meta && meta.size > 0) {
+    for (const f of list) {
+      let sym = 0
+      let loc = 0
+      let have = false
+      for (const id of f.ids) {
+        const m = meta.get(String(id))
+        if (!m) continue
+        have = true
+        sym += Number(m.symbols || 0)
+        loc += Number(m.loc || 0)
+        if (!f.summary && m.summary) {
+          f.summary = m.summary
+          f.role = m.role || ''
+          f.importance = Number(m.importance || 0)
+        }
+      }
+      if (have) { f.symbols = sym; f.loc = loc }
+    }
+  }
 
   const dm = new Map()
   list.forEach((f, i) => {
