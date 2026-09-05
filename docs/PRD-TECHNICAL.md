@@ -62,6 +62,48 @@ bindings expose camelCase.
 `edge.dst` is the one the backwards walk rides. Without it every hop is a full table
 scan over 22,880 edges.
 
+### v2 — the agent coverage tables
+
+| Table | Columns |
+|---|---|
+| `node_cov` | `node_id` u64 pk · `repo_id` · `touches` u32 · `last_tool` · `last_session` · `explored` bool · `last_at` |
+| `touch` | `id` u64 pk autoInc · `repo_id` · `node_id` · `path` · `tool` · `session` · `agent_name` · `at` |
+| `agent_session` | `id` u64 pk autoInc · `session` · `agent_name` · `repo_id` · `online` bool · `touches` u32 · `started_at` · `last_at` |
+| `exploration_request` | `id` u64 pk autoInc · `repo_id` · `node_id` · `path` · `note` · `status` · `asked_by` identity · `claimed_by` · `result` · `at` |
+
+`exploration_request.status` ∈ `pending` | `claimed` | `done`.
+Indexes: `node_cov.repo_id`, `touch.repo_id`, `exploration_request.repo_id`,
+`exploration_request.status`, `agent_session.session`.
+
+### v2 reducers
+
+| Reducer | Signature |
+|---|---|
+| `report_touch` | `(repo_id: u64, session: string, agent_name: string, tool: string, paths_json: string)` |
+| `request_exploration` | `(repo_id: u64, node_id: u64, note: string)` |
+| `claim_request` | `(request_id: u64, agent_name: string)` |
+| `complete_request` | `(request_id: u64, result: string)` |
+| `agent_heartbeat` | `(session: string, agent_name: string, repo_id: u64)` |
+
+### Path resolution — the load-bearing detail
+
+`report_touch` receives repo-relative paths and must resolve them to node ids:
+
+```
+django/forms/fields.py
+  strip extension     → django/forms/fields
+  slashes to dots     → django.forms.fields
+  match every node whose qual (before "::") ENDS WITH that
+```
+
+`endsWith` rather than equality, because shipped quals are prefixed
+(`data.repos.django.forms.fields::...`). A file touch lights **every node in the
+file**. Unresolved paths still write a `touch` row with `node_id = 0` so misses are
+countable, never silently dropped.
+
+**This runs on every agent tool use against up to 9,831 nodes**, so a naive
+scan-with-`endsWith` per node per path is the hot spot to watch.
+
 ### Known schema defect
 
 `node.id` is a **global** primary key, not scoped by `repo_id`. Loading the same
@@ -208,6 +250,25 @@ spacetime generate --lang typescript --module-path ./module --out-dir ./client/s
 `walk.done === true`. Paint from **subscription rows**, never from local state —
 otherwise a second tab that clicked nothing shows nothing, which is the single
 failure that would invalidate the product.
+
+**Coverage contract:** node lit/dark state comes from `node_cov`, subscription-driven.
+Aggregate counts are computed client-side from subscribed rows, because SpacetimeDB
+SQL has no `GROUP BY`.
+
+---
+
+## The Claude Code plugin
+
+An installable plugin at `plugin/` that makes the agent a participant.
+
+| Part | What it does |
+|---|---|
+| `PostToolUse` hook | Matches `Read\|Edit\|Write\|Grep\|Glob`; extracts paths from the tool input; POSTs to `report_touch`. **Fire-and-forget** — ~2s timeout, errors swallowed, never blocks a turn. |
+| `UserPromptSubmit` hook | Queries pending `exploration_request` rows over `/sql` and injects them into context. Only when rows exist. |
+| Skill | The protocol: claim a request, spawn a subagent scoped to that path, explore, `complete_request`. |
+
+The agent cannot subscribe — it is turn-based. So human → agent is a **pull at turn
+boundaries**; agent → human is a true push.
 
 ---
 

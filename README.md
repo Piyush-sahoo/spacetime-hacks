@@ -72,6 +72,7 @@ Measurement corpus: SWE-bench Verified instances (public dataset).
 |---|---|
 | [`docs/PROBLEM-STATEMENT.md`](docs/PROBLEM-STATEMENT.md) | The problem, the evidence, and the diagrams — the backwards walk, the per-repo spread, why a better extractor doesn't fix it |
 | [`docs/SOLUTION.md`](docs/SOLUTION.md) | What we built and why it takes this shape |
+| [`docs/AGENT-LOOP.md`](docs/AGENT-LOOP.md) | **The agent loop** — how the agent publishes its attention and how your tap reaches it |
 | [`docs/SPACETIMEDB.md`](docs/SPACETIMEDB.md) | **Where and how SpacetimeDB is used** — and what we didn't have to build because of it |
 | [`docs/PRD-PRODUCT.md`](docs/PRD-PRODUCT.md) | Product PRD — plain language. Features, users, journeys |
 | [`docs/PRD-TECHNICAL.md`](docs/PRD-TECHNICAL.md) | Technical PRD — schema, reducers, the walk, constraints |
