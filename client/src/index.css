@@ -508,3 +508,15 @@ pre {
   .panel { background: var(--paper); border: 1.5px solid var(--ink); border-radius: 0; }
   .panel-dark { background: var(--hi-bg); color: var(--hi-fg); border-radius: 0; }
 }
+
+/* A directory row and its fold control sit on one line; the row takes the space
+   and the eye takes what it needs. */
+.ixrow { display: flex; align-items: stretch; gap: 4px; }
+.ixrow > .ix { flex: 1 1 auto; min-width: 0; }
+.ixrow > .eye {
+  flex: 0 0 auto; width: 24px;
+  font: 400 12px/1 var(--mono); color: var(--ink-2);
+  background: none; border: 1.5px solid transparent; cursor: pointer;
+}
+.ixrow > .eye:hover { color: var(--ink); border-color: var(--rule); background: var(--face); }
+.ixrow > .eye[aria-pressed="true"] { color: var(--ink); }

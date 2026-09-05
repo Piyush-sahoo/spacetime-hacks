@@ -95,6 +95,26 @@ export function isGeneratedDir(dir) {
 /** Under this, a generated district draws in full — collapsing 3 files hides nothing worth hiding. */
 const COLLAPSE_MIN = 6
 
+/**
+ * Which directories fold themselves the first time a repo is drawn.
+ *
+ * Only generated ones, and only when there is enough of them to be in the way.
+ * Everything else starts open and folds only if somebody asks, because a map
+ * that hides things nobody asked it to hide is not a map of the repository.
+ */
+export function defaultCollapsed(files) {
+  const n = new Map()
+  for (const f of files || []) {
+    const dir = f.district || dirOf(f.mod)
+    n.set(dir, (n.get(dir) || 0) + 1)
+  }
+  const out = new Set()
+  for (const [dir, count] of n) {
+    if (isGeneratedDir(dir) && count >= COLLAPSE_MIN) out.add(dir)
+  }
+  return out
+}
+
 /** `client/src/lib/room` -> `client/src/lib`; a bare name -> `/` (repo root). */
 export function dirOf(mod) {
   const p = String(mod || '').split('.')
@@ -195,7 +215,11 @@ function spiralPack(rects) {
  */
 export function buildAtlas(files, opts) {
   const list = files || []
-  const expanded = (opts && opts.expanded) || new Set()
+  // Names the caller wants drawn as ONE block. Generated directories start in
+  // here (see `defaultCollapsed`), and the eye on any index row adds or removes
+  // any other — one mechanism, so a hand-collapsed directory and a
+  // collapsed-by-default one behave identically.
+  const collapsed = (opts && opts.collapsed) || new Set()
 
   // Impose an order. Never inherit one.
   const order = list.map((f, i) => i).sort((a, b) => {
@@ -237,9 +261,7 @@ export function buildAtlas(files, opts) {
     // A collapsed district occupies one cell and draws one block. It is still a
     // district — it keeps its plate, its letter and its name — so the left index
     // and the map agree about what exists.
-    d.collapsed = isGeneratedDir(d.name)
-      && (d.base + d.fresh.length) >= COLLAPSE_MIN
-      && !expanded.has(d.name)
+    d.collapsed = collapsed.has(d.name) && (d.base + d.fresh.length) > 1
     if (d.collapsed) {
       d.cols = 1; d.rows = 1; d.cap = 1
       d.w = CELL + 1; d.h = CELL + 1

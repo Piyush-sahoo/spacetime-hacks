@@ -366,3 +366,52 @@ export function watchDirectory(onChange) {
     try { conn?.disconnect?.() } catch { /* noop */ }
   }
 }
+
+/**
+ * The OpenAI key, remembered in this browser only.
+ *
+ * It is never sent anywhere but OpenAI, via a procedure argument, and it is
+ * never written to the database or to the repository. localStorage is the same
+ * place the SpacetimeDB token already lives; a key typed once should not have
+ * to be typed again for every repo somebody adds.
+ */
+export function rememberedKey() {
+  try { return localStorage.getItem('map-room-openai') || '' } catch { return '' }
+}
+
+export function rememberKey(k) {
+  try {
+    const v = String(k || '').trim()
+    if (v) localStorage.setItem('map-room-openai', v)
+    else localStorage.removeItem('map-room-openai')
+  } catch { /* private mode */ }
+}
+
+/**
+ * Enrich a whole repository, batch after batch, reporting progress as it goes.
+ *
+ * Indexing gives a map with nothing written on it. This is the pass that gives
+ * every block a size and a sentence, and it runs straight after indexing when a
+ * key is remembered — so somebody adding a repo gets a map that explains itself
+ * rather than one that needs a second, separate decision.
+ *
+ * It is resumable and interruptible by construction: each call takes an offset
+ * and returns the next one, so a half-finished run leaves a half-explained map
+ * rather than a broken one.
+ */
+export async function enrichAll(repoId, total, apiKey, onProgress, shouldStop) {
+  const BATCH = 20
+  let off = 0
+  let done = 0
+  while (off < total) {
+    if (shouldStop && shouldStop()) break
+    const r = parseEnrich(await enrichRepoOverHttp(repoId, off, BATCH, apiKey))
+    if (!r.ok) return { ok: false, error: r.error, done }
+    done += Number(r.done) || 0
+    const nextOff = Number(r.next)
+    if (!Number.isFinite(nextOff) || nextOff <= off) break
+    off = nextOff
+    if (onProgress) onProgress({ done, total, offset: off, llm: r.llm })
+  }
+  return { ok: true, done }
+}

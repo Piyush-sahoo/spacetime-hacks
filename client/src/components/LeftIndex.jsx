@@ -15,7 +15,7 @@ import { stateColour } from '../lib/actors'
  * agent is standing, red where it has been, blue for new ground. The index and
  * the plate must never disagree about what a colour means.
  */
-export default function LeftIndex({ scope, onScope, selected, onSelect, onHide }) {
+export default function LeftIndex({ scope, onScope, selected, onSelect, onHide, onFold, collapsed }) {
   const { atlas, districtStats, coverage, now } = useRoom()
   const [q, setQ] = useState('')
 
@@ -80,16 +80,33 @@ export default function LeftIndex({ scope, onScope, selected, onSelect, onHide }
             const dark = d.lit === 0
             const colour = d.lit ? stateColour(d.at, d.isNew, now) : null
             return (
-              <button
-                key={d.name}
-                className={`ix${dark ? ' ghost' : ''}`}
-                onClick={() => { onScope(d.name); onSelect(null) }}
-                title={`${d.name} — ${d.lit} of ${d.total} files explored`}
-              >
-                {colour ? <span className="sw" style={{ background: colour }} /> : <span className="code">{d.code}</span>}
-                <span className="nm">{d.name}</span>
-                <span className="n">{d.lit}/{d.total}</span>
-              </button>
+              <div key={d.name} className="ixrow">
+                <button
+                  className={`ix${dark ? ' ghost' : ''}`}
+                  onClick={() => { onScope(d.name); onSelect(null) }}
+                  title={`${d.name} — ${d.lit} of ${d.total} files explored`}
+                >
+                  {colour ? <span className="sw" style={{ background: colour }} /> : <span className="code">{d.code}</span>}
+                  <span className="nm">{d.name}</span>
+                  <span className="n">{d.lit}/{d.total}</span>
+                </button>
+                {/* One directory, one block. Somebody looking at a repo knows
+                    which corners of it they do not care about right now, and
+                    the map should be able to say so without hiding anything —
+                    a folded district keeps its plate, its letter and its count. */}
+                {d.total > 1 && onFold && (
+                  <button
+                    className="eye"
+                    onClick={(e) => { e.stopPropagation(); onFold(d.name) }}
+                    title={collapsed.has(d.name)
+                      ? `Unfold ${d.name} — draw its ${d.total} files`
+                      : `Fold ${d.name} into one block`}
+                    aria-pressed={collapsed.has(d.name)}
+                  >
+                    {collapsed.has(d.name) ? '\u25c9' : '\u25cb'}
+                  </button>
+                )}
+              </div>
             )
           })}
           {!rows.length && <p className="micro-label" style={{ padding: '8px 4px' }}>No directory matches.</p>}

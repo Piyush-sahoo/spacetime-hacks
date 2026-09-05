@@ -7,7 +7,7 @@ import { connectMock } from './mock'
 import { ROOM_SLUG, WALK_K, STEP_MS, STALL_TAKEOVER_MS } from './config'
 import { key, idHex, cmpBig, asBig, tsMs } from './util'
 import { buildTerritory, NEW_LAND_KIND } from './territory'
-import { buildAtlas } from './iso'
+import { buildAtlas, defaultCollapsed } from './iso'
 import { routesFor, timelineOf } from './route'
 import { assignSlots, splitSession, OTHER_SLOT, NEUTRAL_SLOT, slotColor } from './actors'
 
@@ -381,18 +381,30 @@ export function RoomProvider({ children }) {
   // `expanded` is view state, not data — it is deliberately NOT in the URL, so
   // a link never lands somebody in a different-looking map than the one that
   // was shared.
-  const [expanded, setExpanded] = useState(() => new Set())
+  // Which directories are drawn as one block. Generated ones fold themselves the
+  // first time a repo is drawn; the eye on any index row folds or opens any
+  // other. `seeded` is per repo, so switching repos re-seeds rather than
+  // carrying one repo's choices onto another's directories.
+  const [collapsed, setCollapsed] = useState(() => new Set())
+  const seeded = useRef(null)
+  useEffect(() => {
+    const rid = repo ? key(repo.id) : null
+    if (!rid || seeded.current === rid || !territory.files.length) return
+    seeded.current = rid
+    setCollapsed(defaultCollapsed(territory.files))
+  }, [repo, territory])
+
   const toggleDistrict = useCallback((name) => {
     if (!name) return
-    setExpanded((prev) => {
+    setCollapsed((prev) => {
       const next = new Set(prev)
       if (next.has(name)) next.delete(name); else next.add(name)
       return next
     })
   }, [])
   const atlas = useMemo(
-    () => buildAtlas(territory.files, { expanded }),
-    [territory, expanded]
+    () => buildAtlas(territory.files, { collapsed }),
+    [territory, collapsed]
   )
 
   // ── the route ─────────────────────────────────────────────────────────────
@@ -682,7 +694,7 @@ export function RoomProvider({ children }) {
     territory, coverage, requests, requestsByFile, agents, actors, touches,
     // the atlas
     atlas, routes, timeline, districtStats, liveKeys, liveOfSession,
-    expanded, toggleDistrict,
+    collapsed, toggleDistrict,
     // The clock the fade is read against. It advances on the same 10s tick that
     // re-evaluates liveness, so a block cooling from green to red costs one
     // memo per ten seconds and nothing per frame.

@@ -23,7 +23,7 @@ import HintBar from './HintBar.jsx'
 export default function Room({ onLeave }) {
   const {
     atlas, timeline, coverage, territory, requestsByFile, requestExploration,
-    canRequest, actors, meta, isMock, retry, toggleDistrict,
+    canRequest, actors, meta, isMock, retry, toggleDistrict, collapsed,
   } = useRoom()
 
   const atlasRef = useRef(null)
@@ -166,6 +166,8 @@ export default function Room({ onLeave }) {
       <div id="main" className={showIndex ? undefined : 'no-index'}>
         <LeftIndex
           onHide={() => setShowIndex(false)}
+          onFold={toggleDistrict}
+          collapsed={collapsed}
           scope={scope}
           onScope={(n) => { if (n) drill(n); else { setScope(null); setSelected(null) } }}
           selected={selected}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { indexRepo } from '../lib/live'
+import { indexRepo, enrichAll, rememberedKey, rememberKey } from '../lib/live'
 import { isGithubSlug, parseIndexResult, parseRepoInput, projectLink, projectsLink } from '../lib/funnel'
 import { Shell, go } from './FunnelKit.jsx'
 import ConnBadge from './ConnBadge.jsx'
@@ -18,6 +18,10 @@ export default function Landing() {
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
   const timers = useRef([])
+  // The second pass, when a key is remembered. null until it starts.
+  const [enrich, setEnrich] = useState(null)
+  const stopEnrich = useRef(false)
+  useEffect(() => () => { stopEnrich.current = true }, [])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
@@ -90,6 +94,23 @@ export default function Landing() {
       }
       setPhase('done')
       setResult({ ...parsedOut, slug: parsedOut.slug || parsed.slug, already: !!already })
+
+      // A map with nothing written on it is half a map. If a key is remembered,
+      // the second pass runs here rather than waiting for somebody to find a
+      // separate button — every block gets its size and its sentence as part of
+      // adding the repo, which is what "add my repo" was always asking for.
+      const key = rememberedKey()
+      const files = Number(parsedOut.nodes) || 0
+      if (key && parsedOut.repoId && files > 0) {
+        setEnrich({ done: 0, total: files })
+        const res = await enrichAll(
+          parsedOut.repoId, files, key,
+          (p) => setEnrich({ done: p.done, total: files }),
+          () => stopEnrich.current
+        )
+        setEnrich(res.ok ? { done: res.done, total: files, finished: true }
+                         : { done: res.done, total: files, error: res.error })
+      }
     } catch (err) {
       timers.current.forEach(clearTimeout)
       setProgress(0)
