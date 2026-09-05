@@ -3,9 +3,6 @@ import { useRoom } from '../lib/room.jsx'
 import { key, num, idHex, tsMs } from '../lib/util'
 import { actorLabel, slotColor, stateColour, stateOf, STATE_LABEL } from '../lib/actors'
 import { blastOf, MAX_LISTED } from '../lib/blast'
-import NodeList from './NodeList.jsx'
-import WalkView from './WalkView.jsx'
-import Verdict from './Verdict.jsx'
 
 /**
  * THE READING PANEL — and, in its first tab, THE PROOF.
@@ -39,7 +36,7 @@ export default function RightPanel({
 }) {
   const {
     touches, timeline, atlas, territory, coverage, requests, requestsByFile,
-    requestExploration, canRequest, actors, covState, sessionFilter, walk,
+    requestExploration, canRequest, actors, covState, sessionFilter,
     dirMeta, districtStats, adjacency,
   } = useRoom()
 
@@ -73,7 +70,6 @@ export default function RightPanel({
         </Tab>
         <Tab id="what" tab={tab} onTab={onTab}>What it does</Tab>
         <Tab id="asked" tab={tab} onTab={onTab}>Asked{openAsks ? ` ${openAsks}` : ''}</Tab>
-        <Tab id="walk" tab={tab} onTab={onTab}>Impact walk</Tab>
       </div>
 
       <div id="body" className="thin-scroll">
@@ -96,18 +92,22 @@ export default function RightPanel({
 
         {tab === 'asked' && <Asked requests={requests} territory={territory} />}
 
-        {tab === 'walk' && (
-          <div className="space-y-4">
-            <p className="eyebrow">The measurement</p>
-            <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-              A bounded backwards walk from one symbol, k=6, run on the server and
-              painted from the subscription. This is the part with a number on it.
-            </p>
-            <NodeList />
-            <WalkView />
-            {walk && <Verdict />}
-          </div>
-        )}
+        {/*
+          THE IMPACT WALK IS GONE FROM THE PANEL.
+
+          The walk measures one thing: can a backwards walk from a change reach
+          the test that guards it. That question needs a repo with LABELLED
+          guarding tests, which the seeded SWE-bench graphs have and a repo
+          somebody indexed from GitHub does not. On an unlabelled repo it
+          reported "0 tests reached" and named the missing test as `node #0` —
+          the not-found sentinel — under a verdict quoting a recall figure
+          measured somewhere else entirely. Arithmetic about test coverage on a
+          repo with no tests.
+
+          `NodeList`, `WalkView` and `Verdict` still exist and still work, as do
+          `start_walk` and `step_walk` on the server. Nothing was deleted; the
+          surface that showed a number where there was no number was.
+        */}
       </div>
     </section>
   )
