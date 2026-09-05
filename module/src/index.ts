@@ -1649,6 +1649,21 @@ const MAX_FILE_CHARS = 12000;
  * Repo-relative file path for a node, exact for indexed repos.
  * `src.lib.auth::auth.ts` -> `src/lib/auth.ts`
  */
+/**
+ * The path a new-land node was minted from.
+ *
+ * `new_land.path` is what the agent actually touched, kept verbatim. The node's
+ * `qual` is that path with the slashes dotted, and dotting cannot be undone —
+ * `plugin/.claude-plugin/plugin.json` and `plugin/.claude/plugin/plugin.json`
+ * dot identically. So the row is the answer and the qual is not.
+ */
+function landPathOf(tx: any, repoId: bigint, nodeId: bigint): string {
+  for (const l of tx.db.new_land.repo_id.filter(repoId)) {
+    if (l.node_id === nodeId) return String(l.path || '');
+  }
+  return '';
+}
+
 function pathOfNode(qual: string): string {
   return moduleToPath(qual);
 }
@@ -2226,10 +2241,23 @@ export const enrichRepo = spacetimedb.procedure(
         // Only nodes `index_repo` minted are one-node-per-file, which is what
         // makes "fetch this node's file" a sane thing to do. Seeded graphs are
         // per-FUNCTION: enriching them would fetch the same file hundreds of
-        // times. NewLand is a path with no file behind it yet.
+        // times.
+        //
+        // NEW LAND IS INCLUDED. It used to be skipped as "a path with no file
+        // behind it yet", which is only true until the file is pushed — and a
+        // file an agent just created and committed is exactly the one somebody
+        // wants explained. If it is not on the default branch the fetch 404s
+        // and it is skipped and counted, which is the same honest outcome the
+        // skip was reaching for, arrived at by asking rather than assuming.
         if (n.id < INDEX_ID_BASE) continue;
-        if (n.kind === 'NewLand') continue;
-        const path = pathOfNode(n.qual);
+        // New land keeps its ORIGINAL path in `new_land`, which is what the
+        // agent actually touched. Its `qual` is that path dotted, and dotting
+        // is lossy — `plugin/.claude-plugin/plugin.json` comes back as
+        // `plugin..claude-plugin.plugin.json` and cannot be undotted. Ask the
+        // table that never threw the answer away.
+        const path = n.kind === NEW_LAND_KIND
+          ? landPathOf(tx, repo_id, n.id)
+          : pathOfNode(n.qual);
         if (path.length === 0) continue;
         filesInRepo.push({ id: n.id, path });
       }
