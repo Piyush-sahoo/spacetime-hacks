@@ -1,0 +1,14 @@
+{
+  "name": "map-room",
+  "owner": {
+    "name": "The Map Room"
+  },
+  "plugins": [
+    {
+      "name": "map-room",
+      "source": "./plugin",
+      "description": "Live coverage map of what the agent has explored, in SpacetimeDB, plus the return path from the human's clicks."
+    }
+  ],
+  "description": "The Map Room — a live, shared map of what an AI agent has explored in a codebase."
+}

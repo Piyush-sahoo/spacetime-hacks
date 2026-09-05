@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "map-room",
+  "version": "0.1.0",
+  "description": "Publishes every file the agent reads, edits or searches into SpacetimeDB so a human can watch a live coverage map — and injects the regions the human clicked back into the agent's context so it goes and explores them.",
+  "author": {
+    "name": "The Map Room"
+  },
+  "homepage": "https://github.com/",
+  "keywords": [
+    "spacetimedb",
+    "observability",
+    "coverage",
+    "multiplayer"
+  ]
+}

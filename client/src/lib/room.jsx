@@ -5,7 +5,8 @@ import { Store, useStoreVersion } from './store'
 import { connectLive } from './live'
 import { connectMock } from './mock'
 import { ROOM_SLUG, WALK_K, STEP_MS, STALL_TAKEOVER_MS } from './config'
-import { key, idHex, cmpBig, asBig } from './util'
+import { key, idHex, cmpBig, asBig, tsMs } from './util'
+import { buildTerritory } from './territory'
 
 const Ctx = createContext(null)
 export const useRoom = () => useContext(Ctx)
@@ -23,6 +24,10 @@ export function RoomProvider({ children }) {
   const [myName, setMyName] = useState('')
   const joinedRef = useRef(false)
   const stage2Ref = useRef(null)
+  const stage3Ref = useRef(null)
+  // 'unknown' -> 'absent' (module has no coverage tables yet) | 'connecting' | 'live'
+  const [covState, setCovState] = useState('unknown')
+  const [covError, setCovError] = useState(null)
 
   // ── connect ───────────────────────────────────────────────────────────────
   const connectingRef = useRef(null)
@@ -51,7 +56,9 @@ export function RoomProvider({ children }) {
     apiRef.current = null
     joinedRef.current = false
     stage2Ref.current = null
+    stage3Ref.current = null
     setSubReady(false)
+    setCovState('absent')
     const api = connectMock(store)
     apiRef.current = api
     api.subscribe([], () => setSubReady(true))
@@ -93,6 +100,30 @@ export function RoomProvider({ children }) {
     ])
   }, [repo])
 
+  // Stage 3: the v2 coverage tables, in their OWN subscription. If the module
+  // has not published them yet the handles are missing and we simply do not
+  // ask — and if the server rejects the query anyway, the failure is contained
+  // here instead of tearing down the walk's subscription.
+  useEffect(() => {
+    const api = apiRef.current
+    if (!repo || !api) return
+    const rid = key(repo.id)
+    if (stage3Ref.current === rid) return
+    if (!api.has?.('node_cov')) { setCovState('absent'); return }
+    stage3Ref.current = rid
+    setCovState('connecting')
+    api.subscribe(
+      [
+        `SELECT * FROM node_cov WHERE repo_id = ${rid}`,
+        `SELECT * FROM exploration_request WHERE repo_id = ${rid}`,
+        `SELECT * FROM agent_session WHERE repo_id = ${rid}`,
+        `SELECT * FROM touch WHERE repo_id = ${rid}`,
+      ],
+      () => setCovState('live'),
+      (msg) => { stage3Ref.current = null; setCovState('absent'); setCovError(msg) }
+    )
+  }, [repo, subReady])
+
   const join = useCallback((name) => {
     setMyName(name)
     if (!apiRef.current || !repo) return
@@ -114,6 +145,76 @@ export function RoomProvider({ children }) {
   }, [v, repo]) // eslint-disable-line
 
   const nodes = useMemo(() => store.rows('node'), [v]) // eslint-disable-line
+
+  // ── coverage: the map ─────────────────────────────────────────────────────
+  // The territory is derived from `node` alone, so the geography is fixed the
+  // moment the graph loads. Coverage then only ever changes colour — nothing
+  // reflows under the audience while the agent works.
+  const territory = useMemo(() => buildTerritory(nodes), [nodes.length]) // eslint-disable-line
+
+  const covRows = useMemo(() => store.rows('node_cov'), [v]) // eslint-disable-line
+
+  /**
+   * Per-file coverage rolled up from node_cov. `lit` is how many of a file's
+   * nodes have been touched; `at` is the newest touch in it, which is what the
+   * map uses to bloom a region the instant it lights.
+   */
+  const coverage = useMemo(() => {
+    const files = territory.files
+    const lit = new Int32Array(files.length)
+    const at = new Float64Array(files.length)
+    const tool = new Array(files.length).fill('')
+    let exploredNodes = 0
+    for (const c of covRows) {
+      if (!c.explored) continue
+      exploredNodes += 1
+      const fi = territory.byNode.get(key(c.nodeId))
+      if (fi === undefined) continue
+      lit[fi] += 1
+      const ms = tsMs(c.lastAt)
+      if (ms > at[fi]) { at[fi] = ms; tool[fi] = c.lastTool || '' }
+    }
+    let exploredFiles = 0
+    for (let i = 0; i < lit.length; i += 1) if (lit[i] > 0) exploredFiles += 1
+    return {
+      lit, at, tool, exploredNodes, exploredFiles,
+      totalNodes: territory.total,
+      totalFiles: files.length,
+      unresolved: covRows.length - exploredNodes,
+    }
+  }, [covRows, territory])
+
+  // ── the return path ───────────────────────────────────────────────────────
+  // One request per file region: the newest row wins, so a region that was
+  // asked for, claimed and finished reads as `done` rather than flickering.
+  const requestRows = useMemo(() => store.rows('exploration_request'), [v]) // eslint-disable-line
+  const requestsByFile = useMemo(() => {
+    const m = new Map()
+    for (const r of [...requestRows].sort((a, b) => cmpBig(a.id, b.id))) {
+      const fi = territory.byNode.get(key(r.nodeId))
+      if (fi === undefined) continue
+      m.set(fi, r)
+    }
+    return m
+  }, [requestRows, territory])
+
+  const requests = useMemo(
+    () => [...requestRows].sort((a, b) => cmpBig(b.id, a.id)),
+    [requestRows]
+  )
+
+  const agents = useMemo(() => {
+    const rid = repo ? key(repo.id) : null
+    return store.rows('agent_session')
+      .filter((a) => !rid || key(a.repoId) === rid)
+      .sort((a, b) => (b.online === a.online ? tsMs(b.lastAt) - tsMs(a.lastAt) : b.online ? 1 : -1))
+  }, [v, repo]) // eslint-disable-line
+
+  const requestExploration = useCallback((nodeId, note) => {
+    if (!apiRef.current || !repo) return Promise.resolve()
+    return Promise.resolve(apiRef.current.requestExploration?.(asBig(repo.id), asBig(nodeId), String(note || '')))
+      .catch((e) => { setCovError(String(e?.message || e)); })
+  }, [repo])
 
   // The walk runs along PREDECESSORS (edge.dst == current, collect edge.src),
   // so a symbol's caller count is exactly how much walk it will produce. A leaf
@@ -272,6 +373,10 @@ export function RoomProvider({ children }) {
     join, startWalk, useMock, retry: connect,
     isMock: meta.mode === 'mock',
     amDriver,
+    // v2 — the coverage loop
+    territory, coverage, requests, requestsByFile, agents,
+    requestExploration, covState, covError,
+    canRequest: !!apiRef.current?.hasReducer?.('request_exploration'),
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

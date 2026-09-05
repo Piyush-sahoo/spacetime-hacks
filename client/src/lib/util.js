@@ -54,3 +54,15 @@ export function cmpBig(a, b) {
   const A = asBig(a), B = asBig(b)
   return A < B ? -1 : A > B ? 1 : 0
 }
+
+// SpacetimeDB `timestamp` columns arrive as a Timestamp object in the SDK, but
+// can also turn up as raw microseconds. Normalise to epoch milliseconds.
+export function tsMs(v) {
+  if (v == null) return 0
+  if (typeof v === 'number') return v > 1e14 ? v / 1000 : v
+  if (typeof v === 'bigint') return Number(v / 1000n)
+  if (typeof v.toDate === 'function') { const d = v.toDate(); return d ? d.getTime() : 0 }
+  const micros = v.microsSinceUnixEpoch ?? v.__timestamp_micros_since_unix_epoch__
+  if (micros != null) return Number(BigInt(micros) / 1000n)
+  return 0
+}

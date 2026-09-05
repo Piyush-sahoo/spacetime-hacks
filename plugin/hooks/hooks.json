@@ -1,0 +1,35 @@
+{
+  "description": "The Map Room \u2014 coverage reporting and human exploration requests.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/post_tool_use.py"
+            ],
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/user_prompt_submit.py"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

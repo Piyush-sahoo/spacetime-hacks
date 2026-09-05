@@ -121,6 +121,85 @@ const verdict = table(
   }
 );
 
+// ------------------------------------------------------- v2: coverage tables
+
+/** Per-node coverage state. One row per node the agent has actually touched. */
+const node_cov = table(
+  { name: 'node_cov', public: true },
+  {
+    node_id: t.u64().primaryKey(),
+    repo_id: t.u64().index('btree'),
+    touches: t.u32(),
+    last_tool: t.string(),
+    last_session: t.string(),
+    explored: t.bool(),
+    last_at: t.timestamp(),
+  }
+);
+
+/** Append-only event log: one row per (tool call, path) the agent reported. */
+const touch = table(
+  { name: 'touch', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    repo_id: t.u64().index('btree'),
+    node_id: t.u64(), // 0 == the path resolved to nothing (a countable miss)
+    path: t.string(),
+    tool: t.string(),
+    session: t.string(),
+    agent_name: t.string(),
+    at: t.timestamp(),
+  }
+);
+
+/** An agent presence row, so agents show up in the room next to humans. */
+const agent_session = table(
+  { name: 'agent_session', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    session: t.string().index('btree'),
+    agent_name: t.string(),
+    repo_id: t.u64(),
+    online: t.bool(),
+    touches: t.u32(),
+    started_at: t.timestamp(),
+    last_at: t.timestamp(),
+  }
+);
+
+/** The return path: a human points at a dark region, the agent picks it up. */
+const exploration_request = table(
+  { name: 'exploration_request', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    repo_id: t.u64().index('btree'),
+    node_id: t.u64(),
+    path: t.string(),
+    note: t.string(),
+    status: t.string().index('btree'), // "pending" | "claimed" | "done"
+    asked_by: t.identity(),
+    claimed_by: t.string(),
+    result: t.string(),
+    at: t.timestamp(),
+  }
+);
+
+/**
+ * Memo table for path resolution. NOT part of the client contract (private).
+ *
+ * report_touch fires on every agent tool use against up to ~10k nodes, and
+ * agents re-read the same handful of files over and over. Resolving a path is a
+ * scan; resolving it twice is waste. Key is `<repo_id>|<raw path>`.
+ */
+const path_cache = table(
+  { name: 'path_cache', public: false },
+  {
+    key: t.string().primaryKey(),
+    repo_id: t.u64().index('btree'),
+    node_ids: t.array(t.u64()),
+  }
+);
+
 const spacetimedb = schema({
   repo,
   node,
@@ -129,6 +208,11 @@ const spacetimedb = schema({
   walk,
   frontier,
   verdict,
+  node_cov,
+  touch,
+  agent_session,
+  exploration_request,
+  path_cache,
 });
 export default spacetimedb;
 
@@ -241,6 +325,8 @@ export const finish_repo = spacetimedb.reducer(
     for (const _ of ctx.db.node.repo_id.filter(repo_id)) nodes += 1;
     let edges = 0;
     for (const _ of ctx.db.edge.repo_id.filter(repo_id)) edges += 1;
+    // The node set just changed, so every memoised path resolution is stale.
+    ctx.db.path_cache.repo_id.delete(repo_id);
     ctx.db.repo.id.update({
       ...r,
       node_count: nodes,
@@ -463,3 +549,350 @@ export const identity_disconnected = spacetimedb.clientDisconnected(ctx => {
     ctx.db.participant.identity.update({ ...p, online: false });
   }
 });
+
+// ============================================================================
+// v2 — the agent coverage loop
+// ============================================================================
+
+/** Hard caps so a chatty hook can never turn one tool call into a long scan. */
+const MAX_PATHS_PER_CALL = 32;
+/** Every shipped repo is < 10k nodes; this is a fuse, not a limit we expect to hit. */
+const MAX_NODES_SCANNED = 60000;
+/** How many progressively-shorter dotted suffixes we will try for one path. */
+const MAX_CANDIDATES = 4;
+
+const SOURCE_EXTS = [
+  '.py', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  '.rs', '.cs', '.go', '.java', '.rb', '.kt', '.scala',
+  '.c', '.h', '.cc', '.cpp', '.hpp',
+];
+
+/**
+ * `django/forms/fields.py` -> `django.forms.fields`
+ *
+ * Strips the extension, normalises separators, drops leading `./` and `/`.
+ * Returns '' when there is nothing usable left.
+ */
+function dottedPath(raw: string): string {
+  let s = raw.trim().replace(/\\/g, '/');
+  while (s.startsWith('./')) s = s.slice(2);
+  while (s.startsWith('/')) s = s.slice(1);
+  while (s.endsWith('/')) s = s.slice(0, -1);
+  for (const ext of SOURCE_EXTS) {
+    if (s.endsWith(ext)) {
+      s = s.slice(0, s.length - ext.length);
+      break;
+    }
+  }
+  const segs = s.split('/').filter(seg => seg.length > 0 && seg !== '.' && seg !== '..');
+  return segs.join('.');
+}
+
+/**
+ * Progressively shorter dotted suffixes, longest first.
+ *
+ * The contract's rule is a plain endsWith against a repo-relative path. The
+ * shorter candidates exist only as a fallback for when a hook hands us an
+ * absolute path (`/Users/me/checkout/django/forms/fields.py`) — we only fall
+ * back to a shorter suffix when the longer ones matched nothing at all, so a
+ * correct repo-relative path always wins on the first candidate.
+ */
+function pathCandidates(dotted: string): string[] {
+  if (dotted.length === 0) return [];
+  const segs = dotted.split('.');
+  const out: string[] = [];
+  for (let start = 0; start < segs.length && out.length < MAX_CANDIDATES; start++) {
+    const rest = segs.length - start;
+    if (rest < 2 && out.length > 0) break; // never fall back to a bare filename
+    out.push(segs.slice(start).join('.'));
+  }
+  return out;
+}
+
+/** endsWith, but only on a dot boundary, so `forms.fields` never eats `myforms.fields`. */
+function suffixMatch(mod: string, cand: string): boolean {
+  if (mod.length < cand.length) return false;
+  if (!mod.endsWith(cand)) return false;
+  const i = mod.length - cand.length;
+  return i === 0 || mod.charCodeAt(i - 1) === 46; // '.'
+}
+
+/** The dotted module path a node lives in: everything before `::`. */
+function nodeModule(qual: string): string {
+  const i = qual.indexOf('::');
+  return i >= 0 ? qual.slice(0, i) : qual;
+}
+
+/**
+ * A node's module path turned back into a repo-relative file path, best effort.
+ * `data.repos.django.django.forms.fields` -> `django/forms/fields.py`
+ * Used to give an exploration_request something the agent can actually open.
+ */
+function moduleToPath(qual: string): string {
+  let mod = nodeModule(qual);
+  const PREFIX = 'data.repos.';
+  if (mod.startsWith(PREFIX)) {
+    const rest = mod.slice(PREFIX.length);
+    const dot = rest.indexOf('.');
+    mod = dot >= 0 ? rest.slice(dot + 1) : rest;
+  }
+  if (mod.length === 0) return '';
+  return mod.split('.').join('/') + '.py';
+}
+
+/**
+ * Resolve repo-relative paths to node ids.
+ *
+ * ONE pass over the repo's nodes handles every uncached path at once, so cost
+ * is O(nodes) per call rather than O(nodes x paths). Already-seen paths are
+ * served from `path_cache` by primary key and cost nothing.
+ */
+function resolvePaths(
+  ctx: Ctx,
+  repo_id: bigint,
+  paths: string[]
+): Map<string, bigint[]> {
+  const out = new Map<string, bigint[]>();
+  type Job = { path: string; cands: string[]; hits: bigint[][] };
+  const pending: Job[] = [];
+
+  for (const p of paths) {
+    if (out.has(p)) continue;
+    const key = `${repo_id}|${p}`;
+    const cached = ctx.db.path_cache.key.find(key);
+    if (cached) {
+      out.set(p, cached.node_ids);
+      continue;
+    }
+    const cands = pathCandidates(dottedPath(p));
+    if (cands.length === 0) {
+      out.set(p, []);
+      continue;
+    }
+    pending.push({ path: p, cands, hits: cands.map(() => [] as bigint[]) });
+  }
+
+  if (pending.length === 0) return out;
+
+  let scanned = 0;
+  let truncated = false;
+  for (const n of ctx.db.node.repo_id.filter(repo_id)) {
+    if (scanned >= MAX_NODES_SCANNED) {
+      truncated = true;
+      break;
+    }
+    scanned += 1;
+    const mod = nodeModule(n.qual);
+    for (const job of pending) {
+      for (let i = 0; i < job.cands.length; i++) {
+        if (suffixMatch(mod, job.cands[i])) {
+          job.hits[i].push(n.id);
+          break; // longest candidate wins for this node
+        }
+      }
+    }
+  }
+
+  for (const job of pending) {
+    let picked: bigint[] = [];
+    for (const bucket of job.hits) {
+      if (bucket.length > 0) {
+        picked = bucket;
+        break; // longest suffix that matched anything at all
+      }
+    }
+    out.set(job.path, picked);
+    // Never memoise a fused/partial scan.
+    if (!truncated) {
+      ctx.db.path_cache.insert({
+        key: `${repo_id}|${job.path}`,
+        repo_id,
+        node_ids: picked,
+      });
+    }
+  }
+  return out;
+}
+
+/** Upsert the agent's presence row. Returns nothing; safe to call constantly. */
+function bumpSession(
+  ctx: Ctx,
+  session: string,
+  agent_name: string,
+  repo_id: bigint,
+  addTouches: number
+): void {
+  const now = ctx.timestamp;
+  for (const s of ctx.db.agent_session.session.filter(session)) {
+    ctx.db.agent_session.id.update({
+      ...s,
+      agent_name: agent_name.length > 0 ? agent_name : s.agent_name,
+      repo_id,
+      online: true,
+      touches: s.touches + addTouches,
+      last_at: now,
+    });
+    return;
+  }
+  ctx.db.agent_session.insert({
+    id: 0n,
+    session,
+    agent_name,
+    repo_id,
+    online: true,
+    touches: addTouches,
+    started_at: now,
+    last_at: now,
+  });
+}
+
+/**
+ * The coverage feed. Fired by the plugin's PostToolUse hook on every tool use.
+ *
+ * `paths_json` is a JSON array STRING of repo-relative file paths. Each path
+ * gets exactly one `touch` row (the event), and every node in the matched file
+ * gets a `node_cov` upsert (the state) — a file touch lights the whole file.
+ * A path that resolves to nothing still gets its `touch` row with node_id = 0,
+ * so misses stay countable.
+ */
+export const report_touch = spacetimedb.reducer(
+  { name: 'report_touch' },
+  {
+    repo_id: t.u64(),
+    session: t.string(),
+    agent_name: t.string(),
+    tool: t.string(),
+    paths_json: t.string(),
+  },
+  (ctx, { repo_id, session, agent_name, tool, paths_json }) => {
+    // A malformed payload from a hook must never fail the agent's turn.
+    let raw: unknown;
+    try {
+      raw = JSON.parse(paths_json);
+    } catch {
+      raw = null;
+    }
+    if (!Array.isArray(raw)) return;
+
+    const paths: string[] = [];
+    const seen = new Set<string>();
+    for (const v of raw) {
+      if (typeof v !== 'string') continue;
+      const s = v.trim();
+      if (s.length === 0 || seen.has(s)) continue;
+      seen.add(s);
+      paths.push(s);
+      if (paths.length >= MAX_PATHS_PER_CALL) break;
+    }
+    if (paths.length === 0) {
+      bumpSession(ctx, session, agent_name, repo_id, 0);
+      return;
+    }
+
+    const now = ctx.timestamp;
+    const resolved = resolvePaths(ctx, repo_id, paths);
+
+    for (const p of paths) {
+      const ids = resolved.get(p) ?? [];
+
+      ctx.db.touch.insert({
+        id: 0n,
+        repo_id,
+        node_id: ids.length > 0 ? ids[0] : 0n,
+        path: p,
+        tool,
+        session,
+        agent_name,
+        at: now,
+      });
+
+      for (const nodeId of ids) {
+        const existing = ctx.db.node_cov.node_id.find(nodeId);
+        if (existing) {
+          ctx.db.node_cov.node_id.update({
+            ...existing,
+            touches: existing.touches + 1,
+            last_tool: tool,
+            last_session: session,
+            explored: true,
+            last_at: now,
+          });
+        } else {
+          ctx.db.node_cov.insert({
+            node_id: nodeId,
+            repo_id,
+            touches: 1,
+            last_tool: tool,
+            last_session: session,
+            explored: true,
+            last_at: now,
+          });
+        }
+      }
+    }
+
+    bumpSession(ctx, session, agent_name, repo_id, paths.length);
+  }
+);
+
+/** Keeps an agent visible in the presence rail between tool calls. */
+export const agent_heartbeat = spacetimedb.reducer(
+  { name: 'agent_heartbeat' },
+  { session: t.string(), agent_name: t.string(), repo_id: t.u64() },
+  (ctx, { session, agent_name, repo_id }) => {
+    bumpSession(ctx, session, agent_name, repo_id, 0);
+  }
+);
+
+// ------------------------------------------------------------ the return path
+
+/** A human clicked a dark node. Ask the agent to go look at it. */
+export const request_exploration = spacetimedb.reducer(
+  { name: 'request_exploration' },
+  { repo_id: t.u64(), node_id: t.u64(), note: t.string() },
+  (ctx, { repo_id, node_id, note }) => {
+    // Already asked and not yet answered — do nothing.
+    for (const r of ctx.db.exploration_request.status.filter('pending')) {
+      if (r.repo_id === repo_id && r.node_id === node_id) return;
+    }
+    const n = ctx.db.node.id.find(node_id);
+    ctx.db.exploration_request.insert({
+      id: 0n,
+      repo_id,
+      node_id,
+      path: n ? moduleToPath(n.qual) : '',
+      note,
+      status: 'pending',
+      asked_by: ctx.sender,
+      claimed_by: '',
+      result: '',
+      at: ctx.timestamp,
+    });
+  }
+);
+
+/** pending -> claimed. No-op if the request is not pending. */
+export const claim_request = spacetimedb.reducer(
+  { name: 'claim_request' },
+  { request_id: t.u64(), agent_name: t.string() },
+  (ctx, { request_id, agent_name }) => {
+    const r = ctx.db.exploration_request.id.find(request_id);
+    if (!r || r.status !== 'pending') return;
+    ctx.db.exploration_request.id.update({
+      ...r,
+      status: 'claimed',
+      claimed_by: agent_name,
+    });
+  }
+);
+
+/** claimed -> done, carrying what the agent found back to every screen. */
+export const complete_request = spacetimedb.reducer(
+  { name: 'complete_request' },
+  { request_id: t.u64(), result: t.string() },
+  (ctx, { request_id, result }) => {
+    const r = ctx.db.exploration_request.id.find(request_id);
+    if (!r || r.status !== 'claimed') return;
+    ctx.db.exploration_request.id.update({ ...r, status: 'done', result });
+  }
+);

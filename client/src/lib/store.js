@@ -1,12 +1,19 @@
 import { useSyncExternalStore } from 'react'
 import { key, idHex } from './util'
 
-export const TABLES = ['repo', 'node', 'edge', 'participant', 'walk', 'frontier', 'verdict']
+// v1 (CONTRACT.md) then v2 (CONTRACT-V2.md). The v2 four are subscribed
+// separately so that a module that has not published them yet cannot take the
+// walk down with it.
+export const TABLES_V1 = ['repo', 'node', 'edge', 'participant', 'walk', 'frontier', 'verdict']
+export const TABLES_V2 = ['node_cov', 'touch', 'agent_session', 'exploration_request']
+export const TABLES = [...TABLES_V1, ...TABLES_V2]
 
 // Primary keys per CONTRACT.md. participant is keyed by identity, everything
 // else by a u64 `id`.
 function rowKey(table, row) {
   if (table === 'participant') return idHex(row.identity)
+  // node_cov is keyed by the node it covers, not by a surrogate id.
+  if (table === 'node_cov') return key(row.nodeId ?? row.node_id ?? row.id)
   return key(row.id)
 }
 

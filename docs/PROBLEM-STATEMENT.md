@@ -34,6 +34,54 @@ It is also silent about the edges the graph never had. **An extractor cannot
 fail-closed on an edge it does not know exists.** Graph-completeness cannot detect
 a missing edge. Only a recall measurement against known labels can.
 
+## The second truncation — and it is the bigger one
+
+Everything above measures the *graph*. But an agent never sees the whole graph.
+
+Context is finite, so every repo map keeps only the top-K identifiers — ranked by
+PageRank, or by recency, or by whatever heuristic the tool uses. That is a **second
+truncation, stacked on an already-lossy graph.** Measured on the same labelled
+instances:
+
+| identifiers the agent keeps | name-matched | type-resolved |
+|---:|---|---|
+| 25 | 2/30 (0.07) | 0/44 (**0.00**) |
+| 50 | 2/30 (0.07) | 0/44 (**0.00**) |
+| 100 | 2/30 (0.07) | 0/44 (**0.00**) |
+| 200 | 2/30 (0.07) | 0/44 (**0.00**) |
+| 400 | 2/30 (0.07) | 2/44 (0.05) |
+| **full graph** | 15/30 (0.50) | 24/44 (0.55) |
+
+```
+recall vs how much of the map the agent actually holds
+
+full  ████████████████████████████████████████████  0.55
+400   ██▌                                           0.05
+200                                                 0.00
+100                                                 0.00
+ 50                                                 0.00
+ 25                                                 0.00
+      └─────────────────────────────────────────────
+        bar for a safe skip: 0.95
+```
+
+An agent holding **400 symbols reaches 2 of 44 guarding tests.** The full-graph row
+is already below the bar; every budgeted row is a collapse.
+
+This reframes the problem. It is not only that the map is missing roads. It is that
+**the agent is only ever looking at a small, chosen slice of it** — and nothing
+shows you which slice, or what fell outside.
+
+## What running code adds — and doesn't
+
+One honest counterweight: folding **actual execution traces** into the graph does
+help. Running each instance's own guarding tests under a tracer and recording the
+`Test → Function` edges that really executed lifts directed connectivity from
+**11/18 (61%) to 12/18 (67%)** on the traced subset.
+
+Better. Still nowhere near 0.95. And it costs a full test run to obtain — which is
+the very thing selection was trying to avoid.
+
 ## Why it is not self-correcting
 
 - Measured across eight years of django history, the figure is flat. It is not
@@ -55,9 +103,22 @@ claim is made that this extractor is worse than theirs.
 
 ## What is missing
 
-The measurement exists. What has never existed is any way to **watch the miss
-happen** — to see a walk crawl outward, exhaust, and stop short of the one test that
-mattered, with your team watching the same thing at the same moment.
+Two things.
+
+**First, nobody can watch the miss happen.** The measurement exists as a number in a
+table. There has never been a way to see a walk crawl outward, exhaust, and stop
+short of the one test that mattered.
+
+**Second — and this is the sharper gap — nobody can see what their agent is
+actually looking at.** When an agent reports "done", you get its output. You do not
+get its attention: which files it opened, which it never touched, which region of
+your codebase it decided was irrelevant without telling you. The budget curve says
+that region is most of the map, and that what falls outside it is where the guarding
+tests live.
+
+You cannot correct a blind spot you cannot see. And today there is no way to point
+at one and say *go look there* — the agent has already finished, and the slice it
+chose is invisible and unaddressable.
 
 ---
 

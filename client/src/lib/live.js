@@ -13,6 +13,25 @@ import { idHex } from './util'
  *   conn.subscriptionBuilder().onApplied().onError().subscribe([sql, ...])
  * SQL text still uses the snake_case wire names (repo_id, walk_id, ...).
  */
+
+const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+
+// The generated accessor for a multi-word table has been spelled both
+// `node_cov` and `nodeCov` across codegen versions. Ask for both rather than
+// betting on one: a wrong guess here silently costs the whole coverage feed.
+function handleFor(conn, table) {
+  const db = conn?.db
+  if (!db) return null
+  return db[table] || db[camel(table)] || null
+}
+
+function reducerFor(conn, name) {
+  const r = conn?.reducers
+  if (!r) return null
+  const fn = r[camel(name)] || r[name]
+  return typeof fn === 'function' ? fn.bind(r) : null
+}
+
 export async function connectLive(store) {
   store.setMeta({ status: 'connecting', mode: 'live', error: null })
 
@@ -28,21 +47,25 @@ export async function connectLive(store) {
       .onConnect((connection, identity, tok) => {
         try { if (tok) localStorage.setItem('map-room-token', tok) } catch { /* private mode */ }
 
-        // Mirror every table. The walk itself runs server-side; `edge` is
-        // mirrored only so the file list can show how many callers a symbol has
-        // and therefore which origins produce a walk worth watching.
+        // Mirror every table the published module actually has. Tables it does
+        // not define are skipped rather than fatal — the v2 coverage tables
+        // land mid-hackathon and the walk must not care either way.
+        const present = []
         for (const t of TABLES) {
-          const handle = connection.db?.[t]
+          const handle = handleFor(connection, t)
           if (!handle) continue
+          present.push(t)
           handle.onInsert?.((_ctx, row) => store.upsert(t, row))
           handle.onUpdate?.((_ctx, _old, row) => store.upsert(t, row))
           handle.onDelete?.((_ctx, row) => store.remove(t, row))
         }
+        api.tables = new Set(present)
 
         store.setMeta({
           status: 'connected',
           mode: 'live',
           identity: idHex(identity),
+          tables: present,
           error: null,
         })
         if (!settled) { settled = true; resolve(api) }
@@ -62,17 +85,32 @@ export async function connectLive(store) {
     const api = {
       mode: 'live',
       conn,
-      subscribe(queries, onApplied) {
+      tables: new Set(),
+      has: (t) => api.tables.has(t),
+      hasReducer: (n) => !!reducerFor(conn, n),
+      // `onFailed` keeps a rejected optional subscription (the v2 tables before
+      // they are published) from painting a red error over a working room.
+      subscribe(queries, onApplied, onFailed) {
+        if (!queries?.length) { onApplied?.(); return null }
         return conn
           .subscriptionBuilder()
           .onApplied(() => onApplied?.())
-          .onError((ctx) => fail(ctx?.event?.message || 'subscription rejected'))
+          .onError((ctx) => {
+            const msg = ctx?.event?.message || 'subscription rejected'
+            if (onFailed) onFailed(msg)
+            else fail(msg)
+          })
           .subscribe(queries)
       },
       joinRoom: (name, repoId) => conn.reducers.joinRoom({ name, repoId }).catch(fail),
       setFocus: (nodeId) => conn.reducers.setFocus({ nodeId }).catch(fail),
       startWalk: (repoId, origin, k) => conn.reducers.startWalk({ repoId, origin, k }).catch(fail),
       stepWalk: (walkId) => conn.reducers.stepWalk({ walkId }).catch(fail),
+      requestExploration: (repoId, nodeId, note) => {
+        const fn = reducerFor(conn, 'request_exploration')
+        if (!fn) return Promise.reject(new Error('request_exploration is not published yet'))
+        return fn({ repoId, nodeId, note })
+      },
       disconnect: () => { try { conn.disconnect() } catch { /* noop */ } },
     }
 
