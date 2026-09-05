@@ -46,4 +46,37 @@ Tailwind client on the SpacetimeDB TS SDK · a Python loader for the seeded grap
 
 Measurement corpus: SWE-bench Verified instances (public dataset).
 
-See `CONTRACT.md` for the module schema.
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [`docs/PROBLEM.md`](docs/PROBLEM.md) | The measurement and the diagrams — the backwards walk, the per-repo spread, why a better extractor doesn't fix it |
+| [`docs/SOLUTION.md`](docs/SOLUTION.md) | Architecture, schema, the core loop, and why the module does the real work |
+| [`docs/PRD.md`](docs/PRD.md) | Scope, acceptance criteria, and the verified demo path |
+| [`docs/PROCESS.md`](docs/PROCESS.md) | Decisions, and the things that broke |
+| [`CONTRACT.md`](CONTRACT.md) | The module schema contract |
+
+## Run it
+
+```bash
+# module
+cd module && npm install && spacetime publish map-room
+
+# load a graph
+python -m ingest.seed --instance django__django-11292 --module map-room --limit 6
+
+# client
+cd client && npm install && npm run dev
+```
+
+## Status
+
+Module live on Maincloud as `map-room`. Loader verified end to end.
+
+The demo walk is measured, not asserted: from a labelled fix site in
+`django__django-11292`, six hops allowed, the frontier paints **1 → 58 → 389 → 57 →
+11** and then exhausts. `graph_complete = true` — the walk did not run out of hops,
+it ran out of graph. It still never reached
+`DateTimeFieldTest#test_datetimefield_1()`, the test that guards that fix.
+
+`RUN_FULL`, at a Wilson lower bound of 0.3585 against a 0.95 bar.
