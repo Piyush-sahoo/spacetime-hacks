@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { CornerUpLeft, Eye, MousePointerClick } from 'lucide-react'
+import { CornerUpLeft, Eye, MousePointerClick, RotateCw } from 'lucide-react'
 import { useRoom } from '../lib/room.jsx'
 import { key, splitQual, idHex } from '../lib/util'
 import { WALK_K } from '../lib/config'
@@ -68,8 +68,15 @@ export default function WalkView() {
             <CornerUpLeft size={12} /> BACKWARDS WALK · PREDECESSORS
           </span>
           {walkDone ? (
-            <span className="micro-label" style={{ color: 'var(--ink)' }}>
-              EXHAUSTED · {walk.graphComplete ? 'GRAPH COMPLETE' : `HIT k=${k}`}
+            <span className="flex items-center gap-2.5">
+              <span className="micro-label" style={{ color: 'var(--ink)' }}>
+                EXHAUSTED · {walk.graphComplete ? 'GRAPH COMPLETE' : `HIT k=${k}`}
+              </span>
+              {bestOrigin && (
+                <button className="pill-ghost !py-1 !px-3" onClick={() => startWalk(bestOrigin.id)}>
+                  <RotateCw size={12} /> Run a deep one
+                </button>
+              )}
             </span>
           ) : amDriver ? (
             <span className="micro-label" style={{ color: 'var(--accent)' }}>STEPPING…</span>
@@ -100,7 +107,7 @@ export default function WalkView() {
         </div>
       </div>
 
-      <div ref={laneRef} className="flex-1 overflow-y-auto thin-scroll p-3.5 sm:p-4 space-y-3 min-h-0" style={{ maxHeight: '44vh' }}>
+      <div ref={laneRef} className="flex-1 overflow-y-auto thin-scroll p-3.5 sm:p-4 space-y-3 min-h-0" style={{ maxHeight: '48vh' }}>
         {hops.map(([h, rows]) => {
           const live = !walkDone && h === hop
           return (
