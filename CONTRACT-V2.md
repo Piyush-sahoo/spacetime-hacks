@@ -125,3 +125,52 @@ HTTP surface (verified against the DEPLOYED module):
 - Verify APIs with `npx ctx7@latest docs /clockworklabs/spacetimedb "<q>"`. Never guess.
 - Never mention "substrate", "friction", "hydra" or "lineage" anywhere.
 - Coverage before the return path. Ship what works.
+
+---
+
+## VERIFIED: procedures work on deployed Maincloud (tested, not assumed)
+
+Proven with a throwaway module `proctest-piyush`:
+
+```
+spacetime call proctest-piyush fetch_tree '"django"' '"django"'
+  -> "status=200 files=10361"     in 3.2 seconds, unauthenticated
+```
+
+The procedure fetched the GitHub trees API, parsed 10,361 file paths, and wrote a row
+transactionally — all inside SpacetimeDB. **The no-backend architecture is real.**
+
+### Facts learned, do not re-derive
+
+1. **Procedure names are SNAKE_CASED on the wire.** `export const fetchTree` is called
+   as `fetch_tree`. Same convention as reducers.
+2. Signature that works:
+   ```typescript
+   export const fetchTree = spacetimedb.procedure(
+     { owner: t.string(), repo: t.string() },   // args
+     t.string(),                                 // return type
+     (ctx, { owner, repo }) => {
+       const res = ctx.http.fetch(url, { method:'GET', headers:{...} });
+       const status = res.status;
+       const data = res.json();
+       ctx.withTx(tx => { tx.db.someTable.insert({...}); });
+       return `...`;
+     }
+   );
+   ```
+3. `ctx.http.fetch(url, {method, headers, body, timeout})` — `res.status`, `res.json()`.
+4. `ctx.withTx(tx => ...)` for the transactional write. Fetch FIRST, then withTx.
+5. GitHub needs a `User-Agent` header. `Accept: application/vnd.github+json`.
+6. Unauthenticated works fine (60 req/hr). Pass a PAT for headroom or private repos.
+7. `spacetime build` prints "tsc not found in node_modules" as a WARNING and still
+   succeeds — it is not an error, ignore it (or add typescript as a devDependency).
+8. Publishing a NEW module needs `--yes` for the non-local-server confirmation.
+
+### The GitHub trees API
+
+```
+GET https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1
+-> { tree: [{path, type:"blob"|"tree", sha, size}], truncated: bool }
+```
+One call = every file path in the repo. django/django = 10,361 entries in 3.2s.
+`truncated: true` must be recorded and surfaced, never silently ignored.
