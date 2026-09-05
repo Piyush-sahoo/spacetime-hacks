@@ -288,7 +288,7 @@ const Tag = memo(function Tag({ b, lit, sel }) {
 // ── the component ───────────────────────────────────────────────────────────
 
 export default function Atlas({
-  handle, scope, selected, onSelect, onDrill, playing, cursor, onStepPick,
+  handle, scope, selected, onSelect, onPickDistrict, onDrill, playing, cursor, onStepPick,
 }) {
   const { atlas, coverage, territory, routes, timeline, requestsByFile, now } = useRoom()
   const svgRef = useRef(null)
@@ -755,11 +755,17 @@ export default function Atlas({
     tween.current = null
     const hit = e.target.closest ? e.target.closest('g.node,g.pkt') : null
     const isPkt = !!hit && hit.classList.contains('pkt')
+    // THE PLATE IS A TARGET TOO. A block answers "what does this file do"; the
+    // dashed boundary it stands on answers "what is this whole directory for",
+    // which is the question somebody asks FIRST. Blocks are drawn after plates,
+    // so they are hit first and clicking one is untouched.
+    const plate = hit || !e.target.closest ? null : e.target.closest('g.plate')
     drag.current = {
       x: e.clientX, y: e.clientY, tx: cam.current.tx, ty: cam.current.ty,
       moved: false, pid: e.pointerId,
       pkt: isPkt ? Number(hit.dataset.i) : null,
       id: hit && !isPkt ? hit.dataset.id : null,
+      plate: plate ? plate.dataset.plate : null,
     }
   }, [])
 
@@ -814,7 +820,12 @@ export default function Atlas({
       if (dd && p) onStepPick?.(dd.hops[p.hop % dd.hops.length].step)
       return
     }
-    if (d.id == null) { onSelect?.(null); return }
+    if (d.id == null) {
+      // Empty ground inside a plate, or the boundary itself: the directory.
+      if (d.plate != null) { onPickDistrict?.(d.plate); return }
+      onSelect?.(null)
+      return
+    }
     const now = performance.now()
     if (scene.level === 'district' && lastTap.current.id === d.id && now - lastTap.current.t < 400) {
       lastTap.current = { id: null, t: 0 }
@@ -823,7 +834,7 @@ export default function Atlas({
     }
     lastTap.current = { id: d.id, t: now }
     onSelect?.(d.id)
-  }, [liveDrawn, onSelect, onDrill, onStepPick, scene, indexById])
+  }, [liveDrawn, onSelect, onPickDistrict, onDrill, onStepPick, scene, indexById])
 
   const onWheel = useCallback((e) => {
     e.preventDefault()
@@ -937,6 +948,9 @@ export default function Atlas({
   })
 
   const selBlock = selected && selected.kind === 'block' ? selected.id : null
+  // The plate a click landed on. Selection is not a hover: it already
+  // re-renders the canvas, so reading it here costs nothing new.
+  const selPlate = selected && selected.kind === 'district' ? selected.name : null
   const showTags = scene.blocks.length <= 700
 
   return (
@@ -967,10 +981,22 @@ export default function Atlas({
             {scene.plates.map((d) => {
               const q = [P(d.gx, d.gy), P(d.gx + d.w, d.gy), P(d.gx + d.w, d.gy + d.h), P(d.gx, d.gy + d.h)]
               const a = P(d.gx, d.gy)
+              const on = selPlate === d.name
               return (
-                <g key={d.name} style={{ pointerEvents: 'none' }}>
-                  <polygon points={pts(q)} fill="none" stroke="var(--ink)" strokeWidth={0.9} opacity={0.5} strokeDasharray="5 4" />
-                  <text x={a[0]} y={a[1] - 6} textAnchor="middle" fontSize="9.5" letterSpacing=".14em" fill="var(--ink-2)">
+                <g key={d.name} className="plate" data-plate={d.name} style={{ cursor: 'pointer' }}>
+                  {/* The ground, as a hit target. Transparent, so it changes
+                      nothing on screen, and drawn BEFORE the blocks, so every
+                      block that stands on it is hit first. */}
+                  <polygon points={pts(q)} fill="transparent" pointerEvents="all" />
+                  <polygon
+                    points={pts(q)} fill="none" stroke="var(--ink)"
+                    strokeWidth={on ? 1.8 : 0.9} opacity={on ? 0.95 : 0.5}
+                    strokeDasharray="5 4" pointerEvents="none"
+                  />
+                  <text
+                    x={a[0]} y={a[1] - 6} textAnchor="middle" fontSize="9.5"
+                    letterSpacing=".14em" fill={on ? 'var(--ink)' : 'var(--ink-2)'}
+                  >
                     {`${d.code} · ${String(d.name).toUpperCase()}`}
                   </text>
                 </g>

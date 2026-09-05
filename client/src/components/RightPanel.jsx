@@ -39,6 +39,7 @@ export default function RightPanel({
   const {
     touches, timeline, atlas, territory, coverage, requests, requestsByFile,
     requestExploration, canRequest, actors, covState, sessionFilter, walk,
+    dirMeta, districtStats,
   } = useRoom()
 
   // Ages must tick, or a live feed reads as a screenshot. One interval, one
@@ -88,6 +89,7 @@ export default function RightPanel({
             selected={selected} atlas={atlas} territory={territory} coverage={coverage}
             requestsByFile={requestsByFile} requestExploration={requestExploration}
             canRequest={canRequest} onSelect={onSelect}
+            dirMeta={dirMeta} districtStats={districtStats}
           />
         )}
 
@@ -196,6 +198,7 @@ function Activity({ rows, seen, selected, onPickStep, cursor, covState, sessionF
 
 function What({
   selected, atlas, territory, coverage, requestsByFile, requestExploration, canRequest, onSelect,
+  dirMeta, districtStats,
 }) {
   const [sent, setSent] = useState(null)
 
@@ -204,9 +207,10 @@ function What({
       <>
         <h3 className="sec" style={{ marginTop: 0 }}>Nothing selected</h3>
         <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-          Click a block on the plate, or a row in the index. A <b>dashed</b> block is
-          one no agent has ever opened — click it to ask for it, and the request
-          appears in every other tab immediately.
+          Click a block on the plate for what that file does, or the dashed
+          boundary around it for what the whole directory is for. A <b>dashed</b>
+          block is one no agent has ever opened — click it to ask for it, and the
+          request appears in every other tab immediately.
         </p>
       </>
     )
@@ -225,6 +229,92 @@ function What({
           Row {selected.step?.id} on the server, which is what puts it at this
           point in the route rather than at any other.
         </p>
+        <div className="actions">
+          <button className="ctl" onClick={() => onSelect(null)}>Clear</button>
+        </div>
+      </>
+    )
+  }
+
+  // ── A DIRECTORY ──────────────────────────────────────────────────────────
+  // The plate, not a block on it. "I click the blocks, I know how the block
+  // works — but client/src/lib, how does that work?" is this branch.
+  if (selected.kind === 'district') {
+    const di = atlas.byDistrict.get(selected.name)
+    if (di == null) return <p className="sub">That directory is no longer on the map.</p>
+    const d = atlas.districts[di]
+    const st = districtStats?.[di]
+    const row = dirMeta?.get(d.name)
+    // Ordered by what enrich_repo thought you would read first, so the list
+    // opens on the file that actually explains the directory.
+    const files = d.files
+      .map((fi) => ({ fi, f: atlas.files[fi] }))
+      .sort((a, b) => (Number(b.f.importance || 0) - Number(a.f.importance || 0))
+        || (String(a.f.label) < String(b.f.label) ? -1 : 1))
+    const withText = files.filter((x) => x.f.summary).length
+
+    return (
+      <>
+        <p className="eyebrow">Directory · {d.code}</p>
+        <h1 className="t">{d.name}</h1>
+        <p className="sub">
+          {d.count} file{d.count === 1 ? '' : 's'} · {st ? st.lit : 0} read
+          {d.symbols ? ` · ${num(d.symbols)} symbols` : ''}
+        </p>
+
+        {/*
+          THE SENTENCE. Written by `summarize_dirs` from the file sentences
+          already in the database — no file is read twice to produce it. A
+          directory nothing has summarised gets NO sentence here, and says so,
+          rather than one made up on the spot.
+        */}
+        {row ? (
+          <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: '0 0 10px' }}>{row.summary}</p>
+        ) : (
+          <p style={{ fontSize: 12.5, lineHeight: 1.5, margin: '0 0 10px', color: 'var(--ink-2)' }}>
+            This directory has not been summarised yet. What is in it is below —
+            every sentence there was written about that file itself.
+          </p>
+        )}
+
+        <h3 className="sec">
+          What is in it{withText ? ` · ${withText} of ${files.length} explained` : ''}
+        </h3>
+        <ul className="q">
+          {files.map(({ fi, f }) => {
+            const b = atlas.blocks[atlas.byFile.get(fi)]
+            const lit = coverage.lit[fi] > 0
+            return (
+              <li
+                key={fi}
+                style={{ cursor: b ? 'pointer' : 'default' }}
+                onClick={() => { if (b) onSelect({ kind: 'block', id: b.id }) }}
+                title={f.path}
+              >
+                <span style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i
+                    style={{
+                      display: 'inline-block', width: 8, height: 8, flex: '0 0 auto',
+                      border: `1px ${lit ? 'solid' : 'dashed'} var(--ink)`,
+                      background: lit ? 'var(--ink-2)' : 'transparent',
+                    }}
+                  />
+                  {f.label}
+                </span>
+                {f.summary ? (
+                  <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0 14px' }}>
+                    {f.summary}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0 14px', opacity: 0.7 }}>
+                    Not read yet — no sentence for this file.
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+
         <div className="actions">
           <button className="ctl" onClick={() => onSelect(null)}>Clear</button>
         </div>
@@ -332,6 +422,71 @@ function What({
   )
 }
 
+/**
+ * A FINDING, READ IN FIVE SECONDS.
+ *
+ * The agent is asked (see plugin/skills/map-room/SKILL.md) for 3-5 short lines,
+ * one fact each. Those newlines are the structure and nothing between the CLI
+ * and the reducer collapses them, so the only job here is to split on them and
+ * show the first three, with the rest one click away.
+ *
+ * The hard rule is the second branch. Rows written before that instruction are
+ * a single 150-word paragraph, and a paragraph has no points in it. Splitting
+ * one on sentence ends would invent a structure the agent never wrote, so it is
+ * clamped to three lines instead and opens in full on click. Nothing lost,
+ * nothing fabricated.
+ */
+const HEAD = 3
+
+function points(text) {
+  const raw = String(text || '').trim()
+  if (!raw) return []
+  let parts
+  if (raw.includes('\n')) parts = raw.split(/\n+/)
+  // A bullet character is unambiguous even on one line. `- ` and `* ` are NOT:
+  // prose is full of dashes, and splitting on them would shred a paragraph.
+  else if (raw.includes('• ')) parts = raw.split(/\s*•\s+/)
+  else return []
+  return parts
+    .map((p) => p.replace(/^\s*(?:[-*•·]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean)
+}
+
+function Finding({ text }) {
+  const pts = useMemo(() => points(text), [text])
+  const [open, setOpen] = useState(false)
+
+  if (pts.length < 2) {
+    return (
+      <p
+        className={open ? 'para open' : 'para'}
+        onClick={() => setOpen((v) => !v)}
+        title={open ? 'Collapse' : 'Read in full'}
+      >
+        {String(text).trim()}
+      </p>
+    )
+  }
+
+  const head = pts.slice(0, HEAD)
+  const rest = pts.slice(HEAD)
+  return (
+    <>
+      <ul className="find">
+        {head.map((p, i) => <li key={i}>{p}</li>)}
+      </ul>
+      {rest.length > 0 && (
+        <details className="more">
+          <summary>{rest.length} more</summary>
+          <ul className="find">
+            {rest.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
+        </details>
+      )}
+    </>
+  )
+}
+
 /* ── ASKED ────────────────────────────────────────────────────────────────── */
 
 function Asked({ requests, territory }) {
@@ -371,12 +526,14 @@ function Asked({ requests, territory }) {
                 </div>
               ) : null}
               <div className="ans">
-                <span className="eyebrow">{String(r.status).toUpperCase()}</span>
-                {r.result ? <span style={{ fontSize: 11.5 }}> · {r.result}</span> : null}
-                {r.claimedBy && idHex(r.claimedBy) ? (
-                  <span style={{ fontSize: 11 }}> · {idHex(r.claimedBy).slice(0, 8)}</span>
-                ) : null}
-                <span style={{ fontSize: 11, color: 'var(--ink-2)' }}> · {ago(tsMs(r.at))}</span>
+                <div>
+                  <span className="eyebrow">{String(r.status).toUpperCase()}</span>
+                  {r.claimedBy && idHex(r.claimedBy) ? (
+                    <span style={{ fontSize: 11 }}> · {idHex(r.claimedBy).slice(0, 8)}</span>
+                  ) : null}
+                  <span style={{ fontSize: 11, color: 'var(--ink-2)' }}> · {ago(tsMs(r.at))}</span>
+                </div>
+                {r.result ? <Finding text={r.result} /> : null}
               </div>
             </li>
           )

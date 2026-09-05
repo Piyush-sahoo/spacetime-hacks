@@ -68,6 +68,20 @@ export default function Room({ onLeave }) {
     requestExploration(territory.files[b.fi].pick, territory.files[b.fi].path)
   }, [sceneBlocks, canRequest, coverage, requestsByFile, requestExploration, territory, toggleDistrict])
 
+  /**
+   * A CLICK ON THE BOUNDARY, not on a block.
+   *
+   * "I click the blocks, I know how the block works — but client/src/lib, how
+   * does that work?" This is that question: the plate is the directory, and
+   * selecting it opens WHAT IT DOES on the directory rather than on any one
+   * file. It changes no scope and no camera, so nothing on screen moves.
+   */
+  const pickDistrict = useCallback((name) => {
+    if (!name) { setSelected(null); return }
+    setSelected({ kind: 'district', name })
+    setTab('what')
+  }, [])
+
   // Blue only earns a line in the key when there is blue on the map. On a repo
   // with no new ground, printing it is one more thing to read for nothing.
   const hasNewGround = useMemo(() => coverage.isNew?.some((v) => v === 1), [coverage])
@@ -185,6 +199,7 @@ export default function Room({ onLeave }) {
             scope={scope}
             selected={selected}
             onSelect={(id) => pickBlock(id, { ask: true })}
+            onPickDistrict={pickDistrict}
             onDrill={drill}
             playing={playing}
             cursor={cursor}

@@ -331,6 +331,35 @@ const file_meta = table(
   }
 );
 
+/**
+ * What a DIRECTORY is for. Written by `summarize_dirs`.
+ *
+ * A SIDE TABLE, for the same reason `file_meta` is one: `node` holds 16k+ rows
+ * across 13 loaded graphs, and a column on a populated table forces a
+ * destructive republish that would wipe every one of them. This is additive and
+ * publishes with `--delete-data=never`.
+ *
+ * The key is `${repo_id}|${dir}` because a directory has no id anywhere -- it is
+ * a grouping the map performs on file paths, not a row anybody minted. `dir` is
+ * spelled exactly the way the atlas spells a district (`client/src/lib`, or `/`
+ * for the repository root), so the plate a click lands on and the row that
+ * explains it are the same string.
+ *
+ * `summary` is the model's, and a directory the model declined to answer for
+ * gets NO ROW rather than an empty one. A missing row reads on screen as "not
+ * summarised yet", which is true; a blank one would read as an answer.
+ */
+const dir_meta = table(
+  { name: 'dir_meta', public: true },
+  {
+    key: t.string().primaryKey(), // `${repo_id}|${dir}`
+    repo_id: t.u64().index('btree'),
+    dir: t.string(),
+    summary: t.string(), // one sentence, model-written
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   repo,
   node,
@@ -350,6 +379,7 @@ const spacetimedb = schema({
   new_land,
   new_land_seq,
   file_meta,
+  dir_meta,
 });
 export default spacetimedb;
 
@@ -2499,6 +2529,335 @@ export const enrichRepo = spacetimedb.procedure(
       `sym_regex=${got.reduce((a, f) => a + f.symbols, 0)} sym_model=${modelSymbols} ` +
       `llm=${llm} next=${from + batch.length}` +
       (misses.length > 0 ? ` misses=${misses.join(',')}` : '')
+    );
+  }
+);
+
+// ---------------------------------------------------------------- directories
+//
+// `enrich_repo` answers "what does this FILE do". This answers the question a
+// map actually gets asked first: "what is this whole DIRECTORY doing" — the
+// dashed plate somebody clicks before they click any block on it.
+//
+// It reads NO FILES. Every sentence it needs is already in `file_meta`, written
+// by the pass before it, so this is reasoning over text the database already
+// holds: zero GitHub traffic, one model call per batch of directories, and the
+// per-file work is never repeated.
+
+/** Directories per call. A repo has far fewer directories than files. */
+const MAX_DIR_LIMIT = 24;
+/** Files quoted per directory in the prompt. Beyond this the extras are counted, not sent. */
+const DIR_FILES_IN_PROMPT = 40;
+/** Per-file slice of an existing summary. They are one sentence already. */
+const DIR_LINE_CHARS = 180;
+
+/** Quals harvested into the seeded corpus carry this scaffolding prefix. */
+const SHIPPED_PREFIX_RE = /^data\.repos\.[^.]+\./;
+
+/**
+ * The module path the CLIENT groups files by — `territory.moduleOf`.
+ * The grouping has to be spelled the same on both sides or the row this writes
+ * will never be found by the plate that needs it.
+ */
+function clientModule(qual: string): string {
+  const m = nodeModule(qual).replace(SHIPPED_PREFIX_RE, '');
+  return m.length > 0 ? m : 'unknown';
+}
+
+/** `client.src.lib.room` -> `client/src/lib`; a bare name -> `/`. `iso.dirOf`. */
+function districtOfModule(mod: string): string {
+  const p = mod.split('.');
+  if (p.length <= 1) return '/';
+  return p.slice(0, -1).join('/');
+}
+
+/** Extensions the qual builder does not strip, so they survive as a last segment. */
+const EXT_TAIL = new Set([
+  'md', 'markdown', 'rst', 'txt', 'css', 'scss', 'sass', 'less',
+  'json', 'yaml', 'yml', 'toml', 'lock', 'html', 'htm', 'svg', 'csv',
+  'vue', 'svelte', 'astro', 'sh', 'bash',
+]);
+
+/** `territory.landDir` — read only for new land, exactly as the client reads it. */
+function landDirOfModule(mod: string): string {
+  const p = mod.split('.');
+  const tail = p.length > 1 && EXT_TAIL.has(String(p[p.length - 1]).toLowerCase()) ? 1 : 0;
+  const cut = p.length - 1 - tail;
+  return cut <= 0 ? '/' : p.slice(0, cut).join('/');
+}
+
+/** The strict schema. One object per directory, nothing else allowed through. */
+function dirFactsSchema(): unknown {
+  return {
+    type: 'object',
+    properties: {
+      dirs: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            dir: { type: 'string' },
+            summary: { type: 'string' },
+          },
+          required: ['dir', 'summary'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['dirs'],
+    additionalProperties: false,
+  };
+}
+
+/**
+ * Say what every directory in an indexed repo is FOR, from what is already known
+ * about the files inside it.
+ *
+ * Resumable and idempotent the same way `enrich_repo` is: directories are walked
+ * in a fixed alphabetical order, `offset`/`limit` cut a batch out of that order,
+ * and the return line carries `next=` so the client can drive batches and stop
+ * whenever it likes. Re-running a batch REPLACES its rows rather than doubling
+ * them.
+ *
+ * Only directories that hold at least one enriched file are in the walk at all.
+ * A directory whose files nobody has summarised has nothing to reason over, and
+ * asking a model to describe it from filenames alone is exactly the kind of
+ * invention this module refuses elsewhere. Those are counted and named in the
+ * return line instead.
+ *
+ * A directory the model omits from its answer gets NO ROW. `skipped=` says how
+ * many, out loud, because "how many did you decline to answer" has to have an
+ * answer.
+ *
+ * `api_key` is an ARGUMENT. It is never stored, never logged and never a
+ * constant. With '' this does nothing and says so — unlike `enrich_repo` there
+ * is no regex half here, because a directory's purpose is prose all the way
+ * down.
+ */
+export const summarizeDirs = spacetimedb.procedure(
+  { name: 'summarize_dirs' },
+  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
+  t.string(),
+  (ctx, { repo_id, offset, limit, api_key }) => {
+    const key = api_key.trim();
+    const want = Math.max(1, Math.min(MAX_DIR_LIMIT, Number(limit) || 0));
+    const from = Math.max(0, Number(offset) || 0);
+
+    type DirFile = { label: string; role: string; importance: number; summary: string };
+    type Dir = { dir: string; files: DirFile[]; total: number };
+
+    let bad = '';
+    let dirs: Dir[] = [];
+    let batch: Dir[] = [];
+    let barren = 0;
+    let total = 0;
+
+    // ---- 1. read: group nodes into files, files into directories -----------
+    // The grouping is `territory.buildTerritory` + `iso.dirOf`, step for step,
+    // because the plate on screen is drawn by those two and a row filed under a
+    // differently-spelled directory is a row nothing will ever read.
+    ctx.withTx(tx => {
+      const r = tx.db.repo.id.find(repo_id);
+      if (!r) { bad = `error: no repo ${repo_id}`; return; }
+
+      type FileAcc = { mod: string; ids: bigint[]; surveyed: number; landPath: string };
+      const byMod = new Map<string, FileAcc>();
+      for (const n of tx.db.node.repo_id.filter(repo_id)) {
+        if (n.id < INDEX_ID_BASE) continue; // seeded graphs are per-function, not per-file
+        const mod = clientModule(n.qual);
+        let f = byMod.get(mod);
+        if (!f) { f = { mod, ids: [], surveyed: 0, landPath: '' }; byMod.set(mod, f); }
+        f.ids.push(n.id);
+        if (n.kind === NEW_LAND_KIND) {
+          if (f.landPath.length === 0) f.landPath = landPathOf(tx, repo_id, n.id);
+        } else {
+          f.surveyed += 1;
+        }
+      }
+      if (byMod.size === 0) {
+        bad =
+          `error: repo ${repo_id} (${r.slug}) holds no index_repo file nodes; ` +
+          `summarize_dirs only explains maps built by index_repo`;
+        return;
+      }
+
+      const dm = new Map<string, Dir>();
+      for (const f of byMod.values()) {
+        // Where the map puts this file. New ground that has never been surveyed
+        // carries its own directory, worked out from the real path the agent
+        // touched; everything else is the dotted module with its last segment
+        // taken off, which is what `iso.dirOf` does.
+        let dir: string;
+        let label: string;
+        if (f.surveyed === 0 && f.landPath.length > 0) {
+          const s = f.landPath.lastIndexOf('/');
+          dir = s === -1 ? '/' : f.landPath.slice(0, s);
+          label = s === -1 ? f.landPath : f.landPath.slice(s + 1);
+        } else if (f.surveyed === 0) {
+          dir = landDirOfModule(f.mod);
+          const p = f.mod.split('.');
+          label = p[p.length - 1] ?? f.mod;
+        } else {
+          dir = districtOfModule(f.mod);
+          const p = f.mod.split('.');
+          label = p[p.length - 1] ?? f.mod;
+        }
+
+        // What is already known about the file. First non-empty summary wins,
+        // exactly as the territory rolls file_meta up onto a file.
+        let summary = '';
+        let role = '';
+        let importance = 0;
+        for (const id of f.ids) {
+          const m = tx.db.file_meta.node_id.find(id);
+          if (!m) continue;
+          if (summary.length === 0 && m.summary.length > 0) {
+            summary = m.summary;
+            role = m.role;
+            importance = m.importance;
+          }
+        }
+
+        let d = dm.get(dir);
+        if (!d) { d = { dir, files: [], total: 0 }; dm.set(dir, d); }
+        d.total += 1;
+        if (summary.length > 0) d.files.push({ label, role, importance, summary });
+      }
+
+      const all = [...dm.values()];
+      // A directory nobody has enriched a single file of is NOT in the walk.
+      // There is nothing here to reason over, and a filename is not a fact.
+      for (const d of all) if (d.files.length === 0) barren += 1;
+      dirs = all.filter(d => d.files.length > 0);
+      // Alphabetical, so `offset` means the same thing on every call.
+      dirs.sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
+      for (const d of dirs) {
+        d.files.sort((a, b) =>
+          (b.importance - a.importance) || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0)
+        );
+      }
+      total = dirs.length;
+      batch = dirs.slice(from, from + want);
+    });
+    if (bad.length > 0) return bad;
+    if (batch.length === 0) {
+      return `ok offset=${from} done=0 total=${total} skipped=0 barren=${barren} note=past-the-end`;
+    }
+    if (key.length === 0) {
+      return (
+        `ok offset=${from} done=0 total=${total} skipped=${batch.length} barren=${barren} ` +
+        `llm=no-key next=${from + batch.length}`
+      );
+    }
+
+    // ---- 2. one model call, over text the database already holds -----------
+    const blocks: string[] = [];
+    for (const d of batch) {
+      const shown = d.files.slice(0, DIR_FILES_IN_PROMPT);
+      const lines = shown.map(f =>
+        `- ${f.label}${f.role.length > 0 ? ` [${f.role}]` : ''}: ${f.summary.slice(0, DIR_LINE_CHARS)}`
+      );
+      const more = d.files.length - shown.length;
+      if (more > 0) lines.push(`- (+${more} more files in this directory)`);
+      blocks.push(
+        `=== DIR: ${d.dir} (${d.total} file${d.total === 1 ? '' : 's'}) ===\n${lines.join('\n')}`
+      );
+    }
+
+    const system =
+      'You label DIRECTORIES on a map of a codebase. For each directory you are ' +
+      'given the one-line summaries already written for the files inside it. ' +
+      'Return exactly one object per directory, echoing its dir string back ' +
+      'VERBATIM. Never invent a directory that was not given to you. If the file ' +
+      'summaries do not say enough to describe the directory, OMIT that directory ' +
+      'rather than guessing. summary: one sentence saying what the directory is ' +
+      'FOR and how its files fit together, start with a verb, at most 28 words, ' +
+      'no markdown, no directory name, no file names, no file counts.';
+
+    let llmRes;
+    try {
+      llmRes = ctx.http.fetch(OPENAI_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+          'User-Agent': 'map-room',
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: blocks.join('\n\n') },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'dir_facts', strict: true, schema: dirFactsSchema() },
+          },
+        }),
+        timeout: OPENAI_TIMEOUT,
+      });
+    } catch {
+      llmRes = null;
+    }
+
+    const said = new Map<string, string>();
+    let llm = 'skipped';
+    if (!llmRes) {
+      llm = 'unreachable';
+    } else if (llmRes.status !== 200) {
+      // The status is the honest answer. 401 means the key is wrong, and that is
+      // worth surfacing rather than swallowing into "0 summaries".
+      llm = `http-${llmRes.status}`;
+    } else {
+      let content = '';
+      try {
+        const data = llmRes.json() as { choices?: { message?: { content?: string } }[] };
+        content = data.choices?.[0]?.message?.content ?? '';
+      } catch {
+        content = '';
+      }
+      if (content.length === 0) {
+        llm = 'empty';
+      } else {
+        try {
+          const parsed = JSON.parse(content) as { dirs?: { dir?: string; summary?: string }[] };
+          const rows = Array.isArray(parsed.dirs) ? parsed.dirs : [];
+          const asked = new Set(batch.map(d => d.dir));
+          for (const row of rows) {
+            const d = typeof row.dir === 'string' ? row.dir.trim() : '';
+            // A directory that was not in this batch is not an answer, it is a
+            // hallucination, and it is dropped rather than written.
+            if (d.length === 0 || !asked.has(d)) continue;
+            const one = clampSummary(row.summary ?? '');
+            if (one.length === 0) continue;
+            said.set(d, one);
+          }
+          llm = `${OPENAI_MODEL}:${said.size}/${batch.length}`;
+        } catch {
+          llm = 'unparseable';
+        }
+      }
+    }
+
+    // ---- 3. write ----------------------------------------------------------
+    let written = 0;
+    ctx.withTx(tx => {
+      for (const d of batch) {
+        const one = said.get(d.dir);
+        if (one === undefined) continue; // no row beats an invented one
+        const k = `${repo_id}|${d.dir}`;
+        const row = { key: k, repo_id, dir: d.dir, summary: one, at: tx.timestamp };
+        if (tx.db.dir_meta.key.find(k)) tx.db.dir_meta.key.update(row);
+        else tx.db.dir_meta.insert(row);
+        written += 1;
+      }
+    });
+
+    const missed = batch.filter(d => !said.has(d.dir)).map(d => d.dir);
+    return (
+      `ok offset=${from} done=${written} total=${total} skipped=${batch.length - written} ` +
+      `barren=${barren} llm=${llm} next=${from + batch.length}` +
+      (missed.length > 0 ? ` missed=${missed.slice(0, 4).join(',')}` : '')
     );
   }
 );

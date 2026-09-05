@@ -151,6 +151,9 @@ export function RoomProvider({ children }) {
     // module that does not have it for it would take the whole coverage
     // subscription down rather than just this one row set.
     if (api.has?.('file_meta')) queries.push(`SELECT * FROM file_meta WHERE repo_id = ${rid}`)
+    // And for `dir_meta`, which is newer still. Same guard, same reason: one
+    // missing table must cost its own row set and nothing else.
+    if (api.has?.('dir_meta')) queries.push(`SELECT * FROM dir_meta WHERE repo_id = ${rid}`)
     api.subscribe(
       queries,
       () => setCovState('live'),
@@ -226,6 +229,22 @@ export function RoomProvider({ children }) {
     for (const r of store.rows('file_meta')) m.set(key(r.nodeId ?? r.node_id), r)
     return m
   }, [metaN]) // eslint-disable-line
+  /**
+   * What each DIRECTORY is for, keyed by the directory name the atlas draws.
+   *
+   * Written by `summarize_dirs` out of the file sentences `enrich_repo` already
+   * wrote, so no file is read twice. Memoised on the ROW COUNT for the same
+   * reason `fileMeta` is: it moves when a batch lands and at no other time, and
+   * it is NEVER an input to geometry — a directory getting a sentence cannot
+   * move a block.
+   */
+  const dirN = store.count('dir_meta')
+  const dirMeta = useMemo(() => {
+    const m = new Map()
+    for (const r of store.rows('dir_meta')) m.set(String(r.dir), r)
+    return m
+  }, [dirN]) // eslint-disable-line
+
   // Enrichment changes HEIGHT and nothing else: districts pack on file count
   // and sort alphabetically, so re-cutting the atlas here cannot move a
   // footprint by a pixel. Coverage is still not an input, and never will be.
@@ -693,7 +712,7 @@ export function RoomProvider({ children }) {
     // v2 — the coverage loop
     territory, coverage, requests, requestsByFile, agents, actors, touches,
     // the atlas
-    atlas, routes, timeline, districtStats, liveKeys, liveOfSession,
+    atlas, routes, timeline, districtStats, dirMeta, liveKeys, liveOfSession,
     collapsed, toggleDistrict,
     // The clock the fade is read against. It advances on the same 10s tick that
     // re-evaluates liveness, so a block cooling from green to red costs one

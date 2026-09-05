@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { indexRepo, enrichAll, rememberedKey, rememberKey } from '../lib/live'
+import { indexRepo, enrichAll, summarizeDirsAll, rememberedKey, rememberKey } from '../lib/live'
 import { isGithubSlug, parseIndexResult, parseRepoInput, projectLink, projectsLink } from '../lib/funnel'
 import { Shell, go } from './FunnelKit.jsx'
 import ConnBadge from './ConnBadge.jsx'
@@ -110,6 +110,23 @@ export default function Landing() {
         )
         setEnrich(res.ok ? { done: res.done, total: files, finished: true }
                          : { done: res.done, total: files, error: res.error })
+
+        // And then the directories. This one reads NO files — every sentence it
+        // needs was just written into `file_meta` — so it is a handful of model
+        // calls over text the database already holds, and it is what lets the
+        // map answer "what is this whole folder for" the first time somebody
+        // clicks a boundary instead of a block.
+        if (res.ok && !stopEnrich.current) {
+          const dirs = await summarizeDirsAll(
+            parsedOut.repoId, key,
+            (p) => setEnrich({ done: res.done, total: files, finished: true, dirs: p.done }),
+            () => stopEnrich.current
+          )
+          setEnrich({
+            done: res.done, total: files, finished: true,
+            dirs: dirs.done, dirTotal: dirs.total, dirError: dirs.ok ? null : dirs.error,
+          })
+        }
       }
     } catch (err) {
       timers.current.forEach(clearTimeout)

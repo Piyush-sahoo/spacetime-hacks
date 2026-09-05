@@ -148,6 +148,24 @@ export async function connectLive(store) {
           apiKey: apiKey || '',
         })
       },
+      /**
+       * Say what every DIRECTORY is for, from the file sentences already in the
+       * database. Reads no files at all — `enrich_repo` did that once, and this
+       * reasons over what it wrote — so it is cheap enough to run straight after
+       * it on every repo somebody adds.
+       */
+      summarizeDirs: (repoId, offset, limit, apiKey) => {
+        const fn = conn?.procedures?.summarizeDirs || conn?.procedures?.summarize_dirs
+        if (typeof fn !== 'function') {
+          return Promise.reject(new Error('summarize_dirs is not published on this module'))
+        }
+        return fn.call(conn.procedures, {
+          repoId,
+          offset: Number(offset) || 0,
+          limit: Number(limit) || 12,
+          apiKey: apiKey || '',
+        })
+      },
       requestExploration: (repoId, nodeId, note) => {
         const fn = reducerFor(conn, 'request_exploration')
         if (!fn) return Promise.reject(new Error('request_exploration is not published yet'))
@@ -268,6 +286,27 @@ export async function enrichRepoOverHttp(repoId, offset, limit, apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify([Number(repoId), Number(offset) || 0, Number(limit) || 20, apiKey || '']),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`the database refused the request (HTTP ${res.status})`)
+  try {
+    const parsed = JSON.parse(text)
+    return typeof parsed === 'string' ? parsed : text
+  } catch {
+    return text
+  }
+}
+
+/**
+ * `summarize_dirs` over plain HTTP, the same shape as `enrichRepoOverHttp`.
+ * Positional argument array; u64/u32 args are JSON NUMBERS, not strings.
+ */
+export async function summarizeDirsOverHttp(repoId, offset, limit, apiKey) {
+  const url = `${httpBase()}/v1/database/${STDB_MODULE}/call/summarize_dirs`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([Number(repoId), Number(offset) || 0, Number(limit) || 12, apiKey || '']),
   })
   const text = await res.text()
   if (!res.ok) throw new Error(`the database refused the request (HTTP ${res.status})`)
@@ -414,4 +453,36 @@ export async function enrichAll(repoId, total, apiKey, onProgress, shouldStop) {
     if (onProgress) onProgress({ done, total, offset: off, llm: r.llm })
   }
   return { ok: true, done }
+}
+
+/**
+ * Say what every directory in a repository is for, batch after batch.
+ *
+ * Chained after `enrichAll`, and cheap in a way that pass is not: it fetches
+ * NOTHING. Every sentence it reasons over is already in `file_meta`, so adding
+ * a repo produces file sentences and directory sentences in one go and the map
+ * can answer "what is this whole folder doing" the first time somebody asks.
+ *
+ * The total is not known until the first call answers with it — directories are
+ * a grouping of the files, not a number anybody stored — so the loop is driven
+ * by `next=` and stops when it reaches `total`.
+ */
+export async function summarizeDirsAll(repoId, apiKey, onProgress, shouldStop) {
+  const BATCH = 12
+  let off = 0
+  let done = 0
+  let total = 0
+  for (let guard = 0; guard < 200; guard += 1) {
+    if (shouldStop && shouldStop()) break
+    const r = parseEnrich(await summarizeDirsOverHttp(repoId, off, BATCH, apiKey))
+    if (!r.ok) return { ok: false, error: r.error, done, total }
+    total = Number(r.total) || total
+    done += Number(r.done) || 0
+    const nextOff = Number(r.next)
+    if (!Number.isFinite(nextOff) || nextOff <= off) break
+    off = nextOff
+    if (onProgress) onProgress({ done, total, offset: off, llm: r.llm })
+    if (total > 0 && off >= total) break
+  }
+  return { ok: true, done, total }
 }

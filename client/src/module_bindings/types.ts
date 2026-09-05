@@ -22,6 +22,15 @@ export const AgentSession = __t.object("AgentSession", {
 });
 export type AgentSession = __Infer<typeof AgentSession>;
 
+export const DirMeta = __t.object("DirMeta", {
+  key: __t.string(),
+  repoId: __t.u64(),
+  dir: __t.string(),
+  summary: __t.string(),
+  at: __t.timestamp(),
+});
+export type DirMeta = __Infer<typeof DirMeta>;
+
 export const Edge = __t.object("Edge", {
   id: __t.u64(),
   repoId: __t.u64(),

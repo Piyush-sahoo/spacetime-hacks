@@ -54,10 +54,12 @@ import StepWalkReducer from "./step_walk_reducer";
 // Import all procedure arg schemas
 import * as EnrichRepoProcedure from "./enrich_repo_procedure";
 import * as IndexRepoProcedure from "./index_repo_procedure";
+import * as SummarizeDirsProcedure from "./summarize_dirs_procedure";
 import * as SummarizeRegionProcedure from "./summarize_region_procedure";
 
 // Import all table schema definitions
 import AgentSessionRow from "./agent_session_table";
+import DirMetaRow from "./dir_meta_table";
 import EdgeRow from "./edge_table";
 import ExplorationRequestRow from "./exploration_request_table";
 import FileMetaRow from "./file_meta_table";
@@ -92,6 +94,20 @@ const tablesSchema = __schema({
       { name: 'agent_session_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, AgentSessionRow),
+  dirMeta: __table({
+    name: 'dir_meta',
+    indexes: [
+      { accessor: 'key', name: 'dir_meta_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+      { accessor: 'repo_id', name: 'dir_meta_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'dir_meta_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, DirMetaRow),
   edge: __table({
     name: 'edge',
     indexes: [
@@ -337,6 +353,7 @@ const reducersSchema = __reducers(
 const proceduresSchema = __procedures(
   __procedureSchema("enrich_repo", EnrichRepoProcedure.params, EnrichRepoProcedure.returnType),
   __procedureSchema("index_repo", IndexRepoProcedure.params, IndexRepoProcedure.returnType),
+  __procedureSchema("summarize_dirs", SummarizeDirsProcedure.params, SummarizeDirsProcedure.returnType),
   __procedureSchema("summarize_region", SummarizeRegionProcedure.params, SummarizeRegionProcedure.returnType),
 );
 
@@ -344,6 +361,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
   tables: typeof tablesSchema.schemaType.tables & {
     /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
     readonly "agent_session": Omit<typeof tablesSchema.schemaType.tables["agentSession"], "accessorName"> & { readonly accessorName: "agent_session" };
+    /** @deprecated Use `dirMeta` instead. This alias will be removed in the next major version. */
+    readonly "dir_meta": Omit<typeof tablesSchema.schemaType.tables["dirMeta"], "accessorName"> & { readonly accessorName: "dir_meta" };
     /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
     readonly "exploration_request": Omit<typeof tablesSchema.schemaType.tables["explorationRequest"], "accessorName"> & { readonly accessorName: "exploration_request" };
     /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */
@@ -377,6 +396,7 @@ const REMOTE_MODULE = {
 
 const tableAccessorAliases = {
   "agent_session": "agentSession",
+  "dir_meta": "dirMeta",
   "exploration_request": "explorationRequest",
   "file_meta": "fileMeta",
   "new_land": "newLand",
@@ -406,6 +426,8 @@ type __DbViewBase = __DbConnectionImpl<typeof REMOTE_MODULE>["db"];
 export type DbView = __DbViewBase & {
   /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
   readonly "agent_session": __DbViewBase["agentSession"];
+  /** @deprecated Use `dirMeta` instead. This alias will be removed in the next major version. */
+  readonly "dir_meta": __DbViewBase["dirMeta"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __DbViewBase["explorationRequest"];
   /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */
@@ -426,6 +448,8 @@ type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
 export type Tables = __TablesBase & {
   /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
   readonly "agent_session": __TablesBase["agentSession"];
+  /** @deprecated Use `dirMeta` instead. This alias will be removed in the next major version. */
+  readonly "dir_meta": __TablesBase["dirMeta"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __TablesBase["explorationRequest"];
   /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */

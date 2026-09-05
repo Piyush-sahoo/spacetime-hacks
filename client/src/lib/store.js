@@ -5,7 +5,7 @@ import { key, idHex } from './util'
 // separately so that a module that has not published them yet cannot take the
 // walk down with it.
 export const TABLES_V1 = ['repo', 'node', 'edge', 'participant', 'walk', 'frontier', 'verdict']
-export const TABLES_V2 = ['node_cov', 'touch', 'agent_session', 'exploration_request', 'new_land', 'file_meta']
+export const TABLES_V2 = ['node_cov', 'touch', 'agent_session', 'exploration_request', 'new_land', 'file_meta', 'dir_meta']
 export const TABLES = [...TABLES_V1, ...TABLES_V2]
 
 // Primary keys per CONTRACT.md. participant is keyed by identity, everything
@@ -18,6 +18,9 @@ function rowKey(table, row) {
   if (table === 'new_land') return String(row.key ?? row.nodeId ?? row.node_id)
   // file_meta is keyed by the node whose file it describes.
   if (table === 'file_meta') return key(row.nodeId ?? row.node_id ?? row.id)
+  // dir_meta is keyed by `<repo_id>|<dir>` — a directory has no id anywhere,
+  // because it is a grouping the map performs, not a row anybody minted.
+  if (table === 'dir_meta') return String(row.key)
   return key(row.id)
 }
 
