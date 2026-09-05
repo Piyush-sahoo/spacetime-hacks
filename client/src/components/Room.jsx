@@ -1,226 +1,229 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Copy, ExternalLink, AlertTriangle, Compass, GitBranch } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import ConnBadge from './ConnBadge.jsx'
-import PresenceRail from './PresenceRail.jsx'
-import NodeList from './NodeList.jsx'
-import WalkView from './WalkView.jsx'
-import Verdict from './Verdict.jsx'
-import PriorNote from './PriorNote.jsx'
-import CoverageStrip from './CoverageStrip.jsx'
-import RequestPanel from './RequestPanel.jsx'
-import Graph from './Graph.jsx'
-import TouchTicker from './TouchTicker.jsx'
-import { key } from '../lib/util'
+import { actorLabel } from '../lib/actors'
+import Atlas from './Atlas.jsx'
+import TopStrip from './TopStrip.jsx'
+import LeftIndex from './LeftIndex.jsx'
+import RightPanel from './RightPanel.jsx'
+import HintBar from './HintBar.jsx'
 
 /**
- * Two views over one room.
+ * THE MAP ROOM — one repo, one plate, one route.
  *
- * THE GRAPH is the map and the default: the repo drawn as a layered node-link
- * diagram — circles for code, arrows for the edges between them, ranks running
- * left to right — painted live from the subscription. IMPACT is the hop-by-hop
- * walk, one click away. Same repo, same participants.
+ * A 3x3 shell and nothing else: the strip of live counters across the top, the
+ * directory index down the left, the isometric plate in the middle, the reading
+ * panel on the right, the key line along the bottom. Everything in all five
+ * regions is painted from the same SpacetimeDB subscription, so a tool call made
+ * by an agent on someone else's machine moves the counters, lights a block,
+ * extends the route and prepends a row to ACTIVITY — in this tab and in every
+ * other open tab — with nothing polling and nobody refreshing.
+ *
+ * `Graph.jsx` and `dag.js` are no longer imported. They stay on disk.
  */
 export default function Room({ onLeave }) {
-  const { repo, meta, walk, walkDone, isMock, retry, participants, coverage, requests } = useRoom()
-  const [view, setView] = useState('coverage')
-  const walkRef = useRef(null)
-  const seen = useRef(null)
+  const {
+    atlas, timeline, coverage, territory, requestsByFile, requestExploration,
+    canRequest, actors, meta, isMock, retry,
+  } = useRoom()
 
-  // A walk that starts while we are already in the room stays on the survey
-  // so every tab watches the same paint. A walk that was already running
-  // when we joined must not hijack the map.
+  const atlasRef = useRef(null)
+  const [scope, setScope] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [tab, setTab] = useState('activity')
+  const [playing, setPlaying] = useState(true)
+  // null means LIVE — the map shows everything that has arrived. A number means
+  // the timeline is being scrubbed and blocks lit after that step go dark again.
+  const [cursor, setCursor] = useState(null)
+
+  // The same scene the canvas cuts, recomputed here for the keyboard. Pure
+  // function of the atlas and the scope, so it can never disagree with what is
+  // drawn — and it reads no coverage, so it cannot move anything.
+  const sceneBlocks = useMemo(() => {
+    if (scope && atlas.byDistrict.has(scope)) {
+      const d = atlas.districts[atlas.byDistrict.get(scope)]
+      return d.files.map((fi) => atlas.blocks[atlas.byFile.get(fi)])
+    }
+    return atlas.full ? atlas.blocks : atlas.dblocks
+  }, [atlas, scope])
+
+  // ── selection ─────────────────────────────────────────────────────────────
+  const pickBlock = useCallback((id, opts) => {
+    const ask = !!(opts && opts.ask)
+    if (!id) { setSelected(null); return }
+    const b = sceneBlocks.find((x) => x.id === id)
+    setSelected({ kind: 'block', id })
+    setTab('what')
+    if (!b || b.fi === undefined) return
+    // A dark block IS the ask. Clicking one puts the region on the queue, and
+    // the request lands in every other tab off the subscription.
+    if (!ask || !canRequest) return
+    if (coverage.lit[b.fi] > 0) return
+    const open = requestsByFile.get(b.fi)
+    if (open && open.status !== 'done') return
+    requestExploration(territory.files[b.fi].pick, territory.files[b.fi].path)
+  }, [sceneBlocks, canRequest, coverage, requestsByFile, requestExploration, territory])
+
+  const pickStep = useCallback((s) => {
+    if (!s) return
+    setSelected({ kind: 'step', id: s.id, step: s })
+    atlasRef.current?.focusNode?.(s.nodeId)
+  }, [])
+
+  const drill = useCallback((name) => {
+    setScope(name)
+    setSelected(null)
+  }, [])
+
+  // Flying to a district is the index's whole job at 2,975 files.
   useEffect(() => {
-    if (!walk) return
-    const id = key(walk.id)
-    if (seen.current === id) return
-    const first = seen.current === null
-    seen.current = id
-    if (first) return
-    setView('coverage')
-  }, [walk?.id]) // eslint-disable-line
+    if (!scope) return
+    atlasRef.current?.focusDistrict?.(scope)
+  }, [scope])
+
+  // ── the timeline ──────────────────────────────────────────────────────────
+  const total = timeline.length
+  const canBack = total > 0 && (cursor == null || cursor > 0)
+  const canNext = cursor != null
+  const back = useCallback(() => {
+    setCursor((c) => Math.max(0, (c == null ? total : c) - 1))
+  }, [total])
+  const next = useCallback(() => {
+    setCursor((c) => (c == null ? null : (c + 1 >= total ? null : c + 1)))
+  }, [total])
+  const scrub = useCallback((frac) => {
+    const n = Math.round(frac * total)
+    setCursor(n >= total ? null : Math.max(0, n))
+  }, [total])
+
+  // ── keyboard ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const idx = selected && selected.kind === 'block'
+        ? sceneBlocks.findIndex((b) => b.id === selected.id)
+        : -1
+      if (e.key === ' ') { e.preventDefault(); setPlaying((p) => !p); return }
+      if (e.key === 'Enter') { e.preventDefault(); if (canNext) next(); else back(); return }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (!sceneBlocks.length) return
+        const d = e.key === 'ArrowDown' ? 1 : -1
+        const n = idx < 0 ? 0 : (idx + d + sceneBlocks.length) % sceneBlocks.length
+        setSelected({ kind: 'block', id: sceneBlocks[n].id })
+        return
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        const b = idx >= 0 ? sceneBlocks[idx] : null
+        if (b && b.district && b.district !== scope) drill(b.district)
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (scope) { setScope(null); setSelected(null) }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sceneBlocks, selected, scope, drill, next, back, canNext])
 
   const disconnected = meta.status === 'error' || meta.status === 'offline'
-  const openAsks = requests.filter((r) => r.status !== 'done').length
+  const pos = total ? ((cursor == null ? total : cursor) / total) * 100 : 0
 
   return (
-    <div className={`min-h-[100dvh] flex flex-col ${isMock ? 'mock-stripe' : ''}`}>
-      {isMock && (
-        <div className="px-4 py-2 flex items-center justify-center gap-2 text-center" style={{ background: 'var(--danger)', color: 'var(--cream)' }}>
-          <AlertTriangle size={14} className="shrink-0" />
-          <span className="micro-label" style={{ color: 'var(--cream)' }}>
-            MOCK DATA — LOCAL FIXTURE FOR UI REVIEW. NOTHING HERE IS A REAL GRAPH OR A REAL MEASUREMENT.
-          </span>
-        </div>
-      )}
+    <div id="app">
+      <TopStrip
+        playing={playing}
+        onPlay={() => setPlaying((p) => !p)}
+        onStep={() => { if (canNext) next(); else back() }}
+        onRefit={() => atlasRef.current?.fit?.(true)}
+        onBack={back}
+        onNext={next}
+        canBack={canBack}
+        canNext={canNext}
+        cursor={cursor}
+        steps={total}
+        onLeave={onLeave}
+      />
 
-      <header className="px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 rule" style={{ borderTop: 'none', borderBottom: '1px solid var(--line)' }}>
-        <div className="flex items-center gap-3 min-w-0">
-          <button className="pill-ghost !px-3 !py-1.5" onClick={onLeave} aria-label="Back">
-            <ArrowLeft size={14} />
-          </button>
-          <div className="min-w-0">
-            <div className="font-serif-display text-[17px] leading-tight truncate">
-              {repo?.label || repo?.slug || 'The Map Room'}
-            </div>
-            <div className="micro-label truncate">
-              {repo
-                ? `${Number(repo.nodeCount || 0).toLocaleString()} NODES · ${Number(repo.edgeCount || 0).toLocaleString()} EDGES · ${String(repo.status || '').toUpperCase()}`
-                : 'LOADING ROOM…'}
+      <div id="main">
+        <LeftIndex
+          scope={scope}
+          onScope={(n) => { if (n) drill(n); else { setScope(null); setSelected(null) } }}
+          selected={selected}
+          onSelect={(s) => { if (s) pickBlock(s.id); else setSelected(null) }}
+        />
+
+        <div id="canvasWrap">
+          <Atlas
+            handle={atlasRef}
+            scope={scope}
+            selected={selected}
+            onSelect={(id) => pickBlock(id, { ask: true })}
+            onDrill={drill}
+            playing={playing}
+            cursor={cursor}
+            onStepPick={pickStep}
+          />
+
+          <div id="rail">
+            <span className="title">
+              {cursor == null ? <>LIVE · <b>{total}</b> CALLS</> : <>STEP <b>{cursor}</b> / {total}</>}
+            </span>
+            <div
+              className="track"
+              role="slider"
+              aria-label="Session timeline"
+              aria-valuenow={cursor == null ? total : cursor}
+              aria-valuemin={0}
+              aria-valuemax={total}
+              tabIndex={0}
+              onPointerDown={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                scrub((e.clientX - r.left) / Math.max(1, r.width))
+              }}
+            >
+              <span className="fill" style={{ width: `${pos}%` }} />
+              <span className="head" style={{ left: `${pos}%` }} />
             </div>
           </div>
-          <RepoPicker />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            className="pill-ghost hidden sm:inline-flex"
-            onClick={() => window.open(window.location.href, '_blank', 'noopener')}
-            title="The whole point: the second tab watches the same map"
-          >
-            <ExternalLink size={13} /> Second tab
-          </button>
-          <button
-            className="pill-ghost sm:hidden"
-            onClick={() => navigator.clipboard?.writeText(window.location.href)}
-            aria-label="Copy link"
-          >
-            <Copy size={13} />
-          </button>
-          <ConnBadge />
-        </div>
-      </header>
 
-      {disconnected && !isMock && (
-        <div className="px-4 sm:px-6 py-2.5 flex items-center gap-3 flex-wrap" style={{ background: 'rgba(192,38,24,0.10)' }}>
-          <span className="micro-label" style={{ color: 'var(--danger)' }}>
-            {meta.status === 'offline' ? 'CONNECTION DROPPED' : 'NOT CONNECTED'} — {meta.error || 'no module'}
-          </span>
-          <button className="pill-ghost !py-1" onClick={retry}>Retry</button>
-        </div>
-      )}
-
-      <main className="flex-1 px-4 sm:px-6 py-4 sm:py-5">
-        <div className="max-w-[1500px] mx-auto grid gap-4 lg:gap-5 lg:grid-cols-[236px_minmax(0,1fr)] items-start [&>*]:min-w-0">
-          <div className="lg:sticky lg:top-4 space-y-4 min-w-0">
-            <PresenceRail />
-            <div className="hidden lg:block"><PriorNote /></div>
+          <div id="zoom">
+            <button onClick={() => atlasRef.current?.zoom?.(1.25)} aria-label="Zoom in">+</button>
+            <button onClick={() => atlasRef.current?.zoom?.(0.8)} aria-label="Zoom out">−</button>
+            <button onClick={() => atlasRef.current?.fit?.(true)} aria-label="Fit">&#10530;</button>
           </div>
 
-          <div className="space-y-4 min-w-0">
-            <CoverageStrip />
-            <TouchTicker />
-
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 p-1 rounded-full w-fit" style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.5)' }}>
-                <Tab active={view === 'coverage'} onClick={() => setView('coverage')} icon={Compass}>
-                  The graph
-                  {openAsks > 0 && <Badge n={openAsks} />}
-                </Tab>
-                <Tab active={view === 'impact'} onClick={() => setView('impact')} icon={GitBranch}>
-                  Impact walk
-                </Tab>
-              </div>
-              <span className="micro-label hidden sm:inline">
-                LAYERED NODE-LINK · RANKS LEFT TO RIGHT · ARROWS ARE REAL EDGES
+          <div id="legend">
+            {actors.map((a) => (
+              <span className="lg" key={a.actorId || 'main'}>
+                <i style={{ background: a.color }} />
+                {a.actorId ? actorLabel(a.actorId) : (a.name || 'main agent')}
               </span>
-            </div>
-
-            {view === 'coverage' ? (
-              <div className="space-y-4">
-                <Graph />
-                <div className="grid gap-4 lg:gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] items-start [&>*]:min-w-0">
-                  <p className="micro-label px-1">
-                    {coverage.exploredFiles === 0
-                      ? 'NOTHING TOUCHED YET — EVERY FILE IN THIS REPO IS A BLIND SPOT'
-                      : `${coverage.totalFiles - coverage.exploredFiles} FILES THE AGENT HAS NEVER OPENED`}
-                  </p>
-                  <RequestPanel />
-                </div>
-                {walkDone && <Verdict />}
-              </div>
-            ) : (
-              <div className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start [&>*]:min-w-0">
-                <NodeList />
-                <div ref={walkRef} className="space-y-4 scroll-mt-4">
-                  <WalkView />
-                  <Verdict />
-                </div>
-              </div>
+            ))}
+            {!actors.length && <span className="lg dead">No agent connected</span>}
+            <span className="lg dead">Dashed · never opened</span>
+            {isMock && <span className="lg dead">Mock fixture</span>}
+            {disconnected && (
+              <button className="lg" onClick={retry} style={{ cursor: 'pointer' }}>
+                {meta.status === 'offline' ? 'Connection dropped' : 'Not connected'} · retry
+              </button>
             )}
-
-            <div className="lg:hidden"><PriorNote /></div>
           </div>
         </div>
-      </main>
 
-      <footer className="rule px-4 sm:px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
-        <span className="micro-label">
-          {participants.filter((p) => p.online).length} ONLINE · EVERY TAB PAINTS FROM THE SUBSCRIPTION
-        </span>
-        <span className="micro-label">k=6 · THRESHOLD 0.95</span>
-      </footer>
+        <RightPanel
+          tab={tab}
+          onTab={setTab}
+          selected={selected}
+          onSelect={setSelected}
+          onPickStep={pickStep}
+          cursor={cursor}
+        />
+      </div>
+
+      <HintBar scope={scope} />
     </div>
-  )
-}
-
-function Tab({ active, onClick, icon: Icon, children }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-full px-3.5 py-1.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
-      style={{
-        background: active ? 'var(--ink)' : 'transparent',
-        color: active ? 'var(--cream)' : 'var(--ink-soft)',
-      }}
-    >
-      <Icon size={13} />
-      {children}
-    </button>
-  )
-}
-
-function Badge({ n }) {
-  return (
-    <span
-      className="mono text-[10px] rounded-full px-1.5 leading-[15px] ml-0.5"
-      style={{ background: 'var(--ask)', color: '#3a2a05' }}
-    >
-      {n}
-    </span>
-  )
-}
-
-/**
- * Which repo this room is a map of.
- *
- * A room IS a repo, and every tab in it must agree on which — so switching is a
- * navigation, not a piece of local state: it writes `?repo=` and reloads. That
- * also makes the choice shareable, which is how the second tab lands in the
- * same room as the first.
- */
-function RepoPicker() {
-  const { repos, repo } = useRoom()
-  const ready = repos.filter((r) => Number(r.nodeCount || 0) > 0)
-  if (ready.length < 2 || !repo) return null
-  return (
-    <label className="hidden md:flex items-center gap-1.5 shrink-0" title="Which repo this room maps">
-      <span className="micro-label">REPO</span>
-      <select
-        className="mono text-[11.5px] rounded-md px-2 py-1 cursor-pointer"
-        style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.6)', color: 'var(--ink)' }}
-        value={String(repo.slug)}
-        onChange={(e) => {
-          const u = new URL(window.location.href)
-          u.searchParams.set('repo', e.target.value)
-          window.location.assign(u.toString())
-        }}
-      >
-        {ready.map((r) => (
-          <option key={String(r.id)} value={String(r.slug)}>
-            {String(r.slug)} · {Number(r.nodeCount).toLocaleString()}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

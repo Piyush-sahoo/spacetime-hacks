@@ -272,7 +272,7 @@ button.ctl:disabled { opacity: .4; cursor: default; box-shadow: none; }
   border: 1.5px solid var(--ink); background: var(--paper);
   position: relative; cursor: pointer; padding: 0;
 }
-#rail .track .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--face); }
+#rail .track .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--rule); }
 #rail .track .head { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--ink); }
 
 #legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 24px); }
@@ -407,8 +407,18 @@ pre {
   #app { grid-template-rows: auto 1fr auto; height: auto; min-height: 100dvh; overflow: visible; }
   #top { flex-wrap: wrap; }
   #stats { flex: 1 0 100%; overflow-x: auto; }
+  /* At 390px a flexible stat block compresses into its neighbour and the strip
+     becomes unreadable overlapping type. Let them keep their width and scroll. */
+  #stats > .stat { flex: 0 0 auto; }
+  #stats > .stat.grow { flex: 0 0 auto; border-right: 1.5px solid var(--ink); }
+  /* Four tabs cannot share 390px. Scroll them rather than clip the last one. */
+  #tabs { overflow-x: auto; }
+  #tabs button { flex: 0 0 auto; padding: 9px 14px; }
   #controls { flex: 1 0 100%; border-left: none; border-top: 1.5px solid var(--ink); padding: 6px 10px; overflow-x: auto; }
   #main { grid-template-columns: 1fr; grid-auto-rows: min-content; }
+  /* A grid item's default `min-width: auto` lets a scrolling tab strip push the
+     track wider than the viewport. This is what holds scrollWidth at 390. */
+  #main > * { min-width: 0; }
   #canvasWrap { height: 58vh; min-height: 320px; border-bottom: 1.5px solid var(--ink); order: 1; }
   #panel { order: 2; border-left: none; }
   #body { overflow-y: visible; }

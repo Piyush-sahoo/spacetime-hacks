@@ -31,7 +31,10 @@ import { NEUTRAL_SLOT, slotColor } from '../lib/actors'
 const HALO_MS = 2400
 const MIN_K = 0.35
 const MAX_K = 3
-const FIT_MIN = 0.2
+// django/django is 695 districts. The whole plate has to be allowed to fit —
+// at that size the map is a skyline you read the SHAPE of, and the left index
+// is how you get inside one. A floor of 0.2 cropped it to a corner.
+const FIT_MIN = 0.02
 const FIT_MAX = 1.5
 
 // ── block primitives ────────────────────────────────────────────────────────
@@ -167,6 +170,24 @@ const Block = memo(function Block({ b, lit, colour, sel, fresh }) {
       <text x={c[0]} y={c[1] + 3} textAnchor="middle" fontSize="9" fill={sel ? 'var(--hi-fg)' : 'var(--ink)'} fontWeight="600">
         {b.code}
       </text>
+      {/*
+        THE HIT SURFACE. A dark block is drawn `fill="none"` — that is what
+        "nobody has ever opened this" looks like — and an unfilled shape has no
+        interior to hit, so clicking the middle of one landed on the background
+        and the ask never fired. This invisible silhouette gives every block a
+        body to click. `pointerEvents: all` is the whole point of it: it hits
+        regardless of paint. It is drawn last so the block in front of another
+        wins, which is also the right answer.
+      */}
+      <polygon
+        points={pts([
+          P(gx, gy, h), P(gx + w, gy, h), P(gx + w, gy, 0),
+          P(gx + w, gy + d, 0), P(gx, gy + d, 0), P(gx, gy + d, h),
+        ])}
+        fill="none"
+        stroke="none"
+        style={{ pointerEvents: 'all' }}
+      />
     </g>
   )
 })
@@ -364,7 +385,7 @@ export default function Atlas({
     const list = blocks || scene.blocks
     if (!box.w || !list.length) return
     const b = boundsOf(list)
-    const pad = 44
+    const pad = 30
     const k = Math.min((box.w - pad * 2) / Math.max(1, b.x1 - b.x0), (box.h - pad * 2) / Math.max(1, b.y1 - b.y0))
     if (!Number.isFinite(k) || k <= 0) return
     const kk = Math.max(FIT_MIN, Math.min(k, FIT_MAX))
@@ -415,8 +436,16 @@ export default function Atlas({
   // ── packets: the agent, riding its own route ──────────────────────────────
   // One per LIVE route only. A route nobody is walking any more is a drawn line,
   // not a moving dot — which is also what lets the rAF chain park.
+  // Re-keyed, not rebuilt: `liveDrawn` gets a new identity on every touch that
+  // lands, and rebuilding here would snap every packet back to the start of its
+  // route once a second while an agent works.
   useEffect(() => {
-    packets.current = liveDrawn.map((d) => ({ key: d.route.key, hop: 0, t: 0, speed: 0.55, pause: 0.4 }))
+    const prev = new Map(packets.current.map((p) => [p.key, p]))
+    packets.current = liveDrawn.map((d) => {
+      const p = prev.get(d.route.key)
+      if (p) { p.hop = Math.min(p.hop, Math.max(0, d.hops.length - 1)); return p }
+      return { key: d.route.key, hop: 0, t: 0, speed: 0.55, pause: 0.4 }
+    })
   }, [liveDrawn])
 
   const drawPackets = useCallback(() => {

@@ -26,9 +26,12 @@ export default function PresenceRail() {
   const { participants, agents, meta, nodeById, covState } = useRoom()
   const online = participants.filter((p) => p.online)
   const liveAgents = agents.filter((a) => a.live)
-  const pool = liveAgents.length ? liveAgents : agents
-  const shownAgents = pool.slice(0, AGENT_CAP)
-  const otherAgents = pool.length - shownAgents.length
+  // NO FALLBACK. There used to be a `liveAgents.length ? liveAgents : agents`
+  // here so the rail was never empty; what it actually did was resurrect
+  // sessions that ended hours ago and paint them in live colours. An empty rail
+  // is the correct drawing of a room with nobody working in it.
+  const shownAgents = liveAgents.slice(0, AGENT_CAP)
+  const otherAgents = liveAgents.length - shownAgents.length
   const liveSubs = liveAgents.filter((a) => a.actorId).length
   const shownHumans = participants.slice(0, HUMAN_CAP)
   const otherHumans = participants.length - shownHumans.length
@@ -45,7 +48,7 @@ export default function PresenceRail() {
       </div>
 
       {/* ── agents ─────────────────────────────────────────────────────── */}
-      {agents.length > 0 ? (
+      {liveAgents.length > 0 ? (
         <ul className="flex lg:flex-col gap-2 mb-3 overflow-x-auto lg:overflow-visible no-scrollbar -mx-1 px-1">
           {shownAgents.map((a) => {
             const sub = !!a.actorId
@@ -93,7 +96,7 @@ export default function PresenceRail() {
             <Bot size={13} />
           </span>
           <span className="micro-label">
-            {covState === 'live' ? 'NO AGENT REPORTING YET' : 'AGENT FEED OFFLINE'}
+            {covState === 'live' ? (agents.length ? 'NO AGENT CONNECTED NOW' : 'NO AGENT REPORTING YET') : 'AGENT FEED OFFLINE'}
           </span>
         </div>
       )}

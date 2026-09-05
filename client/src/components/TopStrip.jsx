@@ -9,7 +9,7 @@ import { useRoom } from '../lib/room.jsx'
  * nothing polling and nobody refreshing.
  */
 export default function TopStrip({
-  playing, onPlay, onStep, onRefit, onBack, onNext, canBack, canNext, cursor, steps,
+  playing, onPlay, onStep, onRefit, onBack, onNext, canBack, canNext, cursor, steps, onLeave,
 }) {
   const { repo, coverage, agents, requests, meta, sessionFilter, timeline } = useRoom()
 
@@ -50,6 +50,7 @@ export default function TopStrip({
         <button className="ctl" onClick={onPlay}>{playing ? '‖ Pause' : '▸ Play'}</button>
         <button className="ctl" onClick={onStep}>Trace one step</button>
         <button className="ctl" onClick={onRefit}>Refit</button>
+        {onLeave && <button className="ctl" onClick={onLeave} title="Back to the projects">&#9668; Out</button>}
       </div>
     </div>
   )
