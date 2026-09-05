@@ -140,23 +140,20 @@ export default function ProjectPage({ slug }) {
       <ol className="fn-steps">
         <Step
           n={1}
-          title="Get The Map Room and log in to SpacetimeDB"
-          why="The login writes the bearer token that the plugin reads out of ~/.config/spacetime/cli.toml. Without it the plugin has nothing to authenticate with."
+          title="Log in to SpacetimeDB"
+          why="The login writes the bearer token the plugin reads out of ~/.config/spacetime/cli.toml. Without it the plugin has nothing to authenticate with. No CLI yet? curl -sSf https://install.spacetimedb.com | sh"
           expect={<><b>Expect:</b> the CLI prints the identity you are now logged in as.</>}
         >
-          <Copy
-            title="clone and log in"
-            text={`git clone ${PLUGIN_REPO}\ncd spacetime-hacks\nspacetime login`}
-          />
+          <Copy title="log in" text={'spacetime login'} />
         </Step>
 
         <Step
           n={2}
-          title="Register this checkout as a plugin marketplace"
-          why={'Run it from the root of that checkout. The path has to be absolute — "." is rejected — which is what $(pwd) is doing here.'}
-          expect={<><b>Expect:</b> <code>Added marketplace: map-room</code>.</>}
+          title="Add the marketplace"
+          why="Straight from GitHub — nothing to clone, and it runs from any directory. Claude Code fetches the repository itself."
+          expect={<><b>Expect:</b> <code>Successfully added marketplace: map-room</code>.</>}
         >
-          <Copy title="add the marketplace" text={'claude plugin marketplace add "$(pwd)"'} />
+          <Copy title="add the marketplace" text={'claude plugin marketplace add Piyush-sahoo/spacetime-hacks'} />
         </Step>
 
         <Step
@@ -206,15 +203,15 @@ export default function ProjectPage({ slug }) {
         >
           <Copy
             title="run the doctor"
-            text={'cd /path/to/your/repo\npython3 /path/to/spacetime-hacks/plugin/scripts/map_room_cli.py doctor'}
+            text={'cd /path/to/your/repo\npython3 "$(ls -d ~/.claude/plugins/cache/map-room/map-room/*/scripts/map_room_cli.py | tail -1)" doctor'}
           />
           <p className="fn-why" style={{ margin: '0 0 6px' }}>
-            Both paths matter: the <code>cd</code> is the repository being
-            checked — the doctor reads the current directory — and the script is
-            the one in the checkout you cloned in step 1. The plugin's own
-            installed copy lives under{' '}
+            Run it from inside the repository you want checked — the doctor reads
+            the current directory to work out which map this checkout belongs to.
+            The installed copy of the script lives under{' '}
             <code>~/.claude/plugins/cache/map-room/map-room/&lt;version&gt;/scripts/</code>,
-            which moves every time the version changes; the checkout does not.
+            and that version moves every time the plugin updates, which is why the
+            command globs for it rather than naming one.
           </p>
         </Step>
       </ol>
@@ -247,8 +244,8 @@ export default function ProjectPage({ slug }) {
           <p className="fn-q"><strong>Your repository is not indexed yet.</strong></p>
           <p className="fn-a">
             The doctor says <code>not-indexed</code>. Index it from the front page
-            — three and a half seconds — or run{' '}
-            <code>python3 plugin/scripts/map_room_cli.py index</code>.
+            — three and a half seconds — or run the same globbed script path from
+            step 6 with <code>index</code> instead of <code>doctor</code>.
           </p>
         </li>
         <li>
@@ -275,11 +272,11 @@ export default function ProjectPage({ slug }) {
         <li>
           <p className="fn-q"><strong>python3 says it cannot open that file.</strong></p>
           <p className="fn-a">
-            The doctor's path is wrong. There is no{' '}
-            <code>~/.claude/plugins/marketplaces/map-room/</code> — that
-            directory holds the marketplace only when it was added from a git
-            URL, and step 2 adds it from a local directory. Use the script in
-            the checkout you cloned, which is what step 6 copies.
+            The glob found nothing, which means the plugin is not installed —
+            go back to step 3. Check what is actually there with{' '}
+            <code>ls ~/.claude/plugins/cache/map-room/map-room/</code>; you
+            should see a version directory. Do not hand-type a version number,
+            because it moves on every update.
           </p>
         </li>
         <li>
@@ -288,20 +285,21 @@ export default function ProjectPage({ slug }) {
             Claude Code caches an installed plugin under{' '}
             <code>~/.claude/plugins/cache/map-room/map-room/&lt;version&gt;/</code>,
             keyed on the version in the manifest — so <code>install</code> is a
-            no-op when that version is already there, however much the code
-            behind it changed. Pull the checkout, run{' '}
-            <strong>step 2 again</strong> so the marketplace re-reads it, then
-            step 3. Confirm with step 4 before going further: on the old
-            three-hook build a session that ends never switches its agent off,
-            and the map keeps showing it as live.
+            silent no-op when that version is already there, however much the code
+            behind it changed. Run{' '}
+            <code>claude plugin marketplace update map-room</code>, then{' '}
+            <code>claude plugin uninstall map-room@map-room</code> and step 3
+            again. The uninstall is the part that matters. Confirm with step 4
+            before going further: on the old three-hook build a session that ends
+            never switches its agent off, and the map keeps showing it as live.
           </p>
         </li>
         <li>
           <p className="fn-q"><strong>The binding is cached and now stale.</strong></p>
           <p className="fn-a">
             A resolved binding is trusted for a week. After indexing a repository
-            that was previously unindexed, run{' '}
-            <code>python3 plugin/scripts/map_room_cli.py rebind</code> to forget it.
+            that was previously unindexed, run the step 6 command with{' '}
+            <code>rebind</code> instead of <code>doctor</code> to forget it.
           </p>
         </li>
       </ul>
