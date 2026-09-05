@@ -68,14 +68,53 @@ Give the subagent a prompt shaped like this:
 If the request carries a note, the note is the human's actual question — answer
 *that* specifically, not just the generic summary.
 
-### 3. Complete it
+### 3. Complete it — as points, never a paragraph
 
-Write the findings back. Keep it to a tight paragraph or a few lines; it renders
-on the human's map, not in a terminal.
+The findings render as a list on the human's map, next to a dozen other rows.
+They have five seconds and a narrow column. A dense 150-word paragraph is good
+content arriving in the wrong shape: it reads as a wall and gets skipped.
+
+So write **3-5 short lines, one fact per line, each starting with a verb**. One
+newline between lines — the line breaks ARE the structure, and the panel splits
+on them. No preamble, no restating the question, no markdown headings, no
+bullet characters (the panel adds its own).
+
+Put the single most useful fact first and any risk last. Keep each line under
+about 120 characters; specific numbers and names are what make a line worth its
+row, so keep them.
+
+This is the shape:
+
+```
+Read config.js — 32 lines, constants only, no logic.
+Exports STDB_URI, ROOM_SLUG, WALK_K, PRIOR.
+ROOM_SLUG reads ?repo= so one deploy serves every repo.
+Risk: WALK_K and PRIOR duplicate module/src/index.ts with nothing enforcing it.
+```
+
+Not this shape:
+
+```
+I explored the config file as requested. It turns out that config.py does not
+exist; the file is actually config.js, which is 32 lines long and contains only
+constants with zero logic and no imports. Its exports are STDB_URI and ...
+```
+
+Pass it with a real newline in the string. A quoted heredoc keeps the breaks
+intact through the shell:
 
 ```bash
-python3 "$CLAUDE_PLUGIN_ROOT/scripts/map_room_cli.py" complete <request_id> "findings text"
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/map_room_cli.py" complete <request_id> "$(cat <<'EOF'
+Read config.js — 32 lines, constants only, no logic.
+Exports STDB_URI, ROOM_SLUG, WALK_K, PRIOR.
+ROOM_SLUG reads ?repo= so one deploy serves every repo.
+Risk: WALK_K and PRIOR duplicate module/src/index.ts with nothing enforcing it.
+EOF
+)"
 ```
+
+A single-line finding still works for a one-fact answer — one line is one point.
+What does not work is four facts welded into one line.
 
 ### 4. Tell the user
 
@@ -103,6 +142,8 @@ python3 "$CLAUDE_PLUGIN_ROOT/scripts/map_room_cli.py" coverage    # explored vs 
   saying exactly that.
 - **Never fabricate findings.** Read the code. The whole point of the map is
   that it distinguishes what was actually looked at from what was not.
+- **Report in points, not prose.** 3-5 lines, one fact each, newline separated.
+  The panel splits on the newlines; a paragraph arrives as a wall and is skipped.
 - **The user's own prompt still comes first.** A pending request is not an
   interrupt. If the user asked for something else, mention the request and ask
   whether to handle it now.

@@ -377,6 +377,37 @@ pre {
 .q li.to::before { content: '→'; }
 .q .ans { margin-top: 2px; padding-left: 10px; border-left: 1.5px solid var(--ink); }
 
+/* A FINDING IS POINTS, NOT A WALL.
+   The agent reports 3-5 newline-separated lines; three show, the rest sit
+   behind a `+` toggle. Selectors carry `#body` because `#body ul`/`#body li`
+   are ID-specific and would otherwise win over these. */
+#body .q ul.find { list-style: none; margin: 3px 0 0; padding: 0; max-width: none; }
+#body .q ul.find li {
+  position: relative; padding-left: 11px; margin: 0 0 2px;
+  font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere;
+}
+#body .q ul.find li::before { content: '·'; position: absolute; left: 1px; top: 0; color: var(--ink-2); }
+#body .q details.more { margin: 1px 0 0; }
+#body .q details.more > summary {
+  display: inline-block; list-style: none; cursor: pointer; padding: 1px 3px 1px 0;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+#body .q details.more > summary::-webkit-details-marker { display: none; }
+#body .q details.more > summary::before { content: '+'; margin-right: 5px; }
+#body .q details.more[open] > summary::before { content: '−'; }
+#body .q details.more > summary:hover { background: var(--face); color: var(--ink); }
+#body .q details.more > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* LEGACY ROWS. One paragraph with no points in it — clamped, not faked. */
+#body .q p.para {
+  margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; cursor: pointer;
+  max-width: none; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+#body .q p.para.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+#body .q p.para:hover { background: var(--face); }
+
 /* THE LIVE TAPE — the liveness proof. One row per tool call, newest first. */
 .feed { list-style: none; margin: 0; padding: 0; }
 .feed li {

@@ -3,7 +3,8 @@
 
     map_room_cli.py pending
     map_room_cli.py claim <request_id> [agent_name]
-    map_room_cli.py complete <request_id> "findings"
+    map_room_cli.py complete <request_id> "findings"   (3-5 lines, newline separated)
+    map_room_cli.py complete <request_id> -             read the findings from stdin
     map_room_cli.py coverage
     map_room_cli.py doctor
     map_room_cli.py index [owner/repo]     build the map for this repo
@@ -72,12 +73,38 @@ def cmd_claim(argv) -> int:
 
 def cmd_complete(argv) -> int:
     if len(argv) < 2:
-        print('usage: map_room_cli.py complete <request_id> "findings"', file=sys.stderr)
+        print('usage: map_room_cli.py complete <request_id> "findings"   (or: ... complete <id> - <<\'EOF\')',
+              file=sys.stderr)
         return 2
     cfg, token = _ctx()
-    result = " ".join(argv[1:])[:4000]
+    if argv[1] == "-" and len(argv) == 2:
+        # A finding is 3-5 lines. Heredocs and pipes are the sane way to hand
+        # multi-line text to a CLI without the shell eating the breaks.
+        result = _clean(sys.stdin.read())
+    else:
+        result = _clean(" ".join(argv[1:]))
     out = m.complete_request(cfg, token, argv[0], result)
     return _report("completed request #%s" % argv[0], out)
+
+
+def _clean(text: str) -> str:
+    """Tidy a finding WITHOUT flattening it.
+
+    The newlines are the structure -- the map splits on them to render points --
+    so nothing here may collapse "\n" into a space. Only CRLF, trailing spaces
+    and runs of blank lines go; the single line breaks survive to the reducer,
+    which stores the string verbatim."""
+    lines = [ln.rstrip() for ln in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    out, blank = [], False
+    for ln in lines:
+        if not ln.strip():
+            blank = bool(out)          # never open with a blank line
+            continue
+        if blank:
+            out.append("")             # at most one blank line between points
+            blank = False
+        out.append(ln)
+    return "\n".join(out)[:4000]
 
 
 def cmd_index(argv) -> int:
