@@ -14,6 +14,11 @@ import { assignSlots, splitSession, OTHER_SLOT, NEUTRAL_SLOT, slotColor } from '
 // How recently an agent_session must have reported to count as working now.
 // `agent_session.online` is set true by report_touch and nothing ever sets it
 // false, so recency is the only honest liveness signal the client has.
+//
+// THIS NO LONGER GATES COLOUR. It drives exactly two things: who the left rail
+// and the legend call LIVE RIGHT NOW, and which routes carry a moving packet.
+// The map's fill is a clock (`stateColour` in `actors.js`) and the map's
+// outline is an actor, and neither of them asks this constant anything.
 const AGENT_LIVE_MS = 120000
 
 // The activity feed is the liveness proof, so it must not look stalled while a
@@ -142,6 +147,10 @@ export function RoomProvider({ children }) {
       `SELECT * FROM touch WHERE repo_id = ${rid}`,
     ]
     if (api.has?.('new_land')) queries.push(`SELECT * FROM new_land WHERE repo_id = ${rid}`)
+    // Same rule for `file_meta`: it is the newest table of all, and asking a
+    // module that does not have it for it would take the whole coverage
+    // subscription down rather than just this one row set.
+    if (api.has?.('file_meta')) queries.push(`SELECT * FROM file_meta WHERE repo_id = ${rid}`)
     api.subscribe(
       queries,
       () => setCovState('live'),
@@ -177,8 +186,15 @@ export function RoomProvider({ children }) {
   const nodeSplit = useMemo(() => {
     const all = store.rows('node')
     const base = []
-    for (const n of all) if (n.kind !== NEW_LAND_KIND) base.push(n)
-    return { all, base }
+    // NEW LAND IS BLUE, wherever it ends up standing. The id set is built here
+    // whether or not the territory has a cell for it yet, so the moment one is
+    // given a footprint it is already the right colour.
+    const fresh = new Set()
+    for (const n of all) {
+      if (n.kind === NEW_LAND_KIND) fresh.add(key(n.id))
+      else base.push(n)
+    }
+    return { all, base, fresh }
   }, [v]) // eslint-disable-line
   const nodes = nodeSplit.all
 
@@ -186,7 +202,21 @@ export function RoomProvider({ children }) {
   // The territory is derived from `node` alone, so the geography is fixed the
   // moment the graph loads. Coverage then only ever changes colour — nothing
   // reflows under the audience while the agent works.
-  const territory = useMemo(() => buildTerritory(nodeSplit.base), [nodeSplit.base.length]) // eslint-disable-line
+  // What `enrich_repo` measured inside each file. Keyed by node id, memoised on
+  // the ROW COUNT so it moves when a batch lands and at no other time.
+  const metaN = store.count('file_meta')
+  const fileMeta = useMemo(() => {
+    const m = new Map()
+    for (const r of store.rows('file_meta')) m.set(key(r.nodeId ?? r.node_id), r)
+    return m
+  }, [metaN]) // eslint-disable-line
+  // Enrichment changes HEIGHT and nothing else: districts pack on file count
+  // and sort alphabetically, so re-cutting the atlas here cannot move a
+  // footprint by a pixel. Coverage is still not an input, and never will be.
+  const territory = useMemo(
+    () => buildTerritory(nodeSplit.base, fileMeta),
+    [nodeSplit.base.length, fileMeta]
+  ) // eslint-disable-line
 
   const covRows = useMemo(() => store.rows('node_cov'), [v]) // eslint-disable-line
 
@@ -208,19 +238,29 @@ export function RoomProvider({ children }) {
     const t = setInterval(() => setTick((n) => n + 1), 10000)
     return () => clearInterval(t)
   }, [])
+  const nowFade = useMemo(() => Date.now(), [tick])
 
   /**
-   * THE COLOUR GATE.
+   * THE LIVENESS GATE — who is working RIGHT NOW.
    *
-   * Every hue in this product means "an agent is connected right now". These
-   * are the only rows allowed to mint one. Everything downstream — the legend,
-   * the route, the blocks, the activity feed — reads its colour through here,
-   * so there is exactly one place a dead session could leak a colour from, and
-   * it is closed.
+   * This used to be the colour gate, and that was the bug. It answers one
+   * question only: which agents are currently connected. The rail says so, the
+   * legend says so, and only their routes get a packet riding them — which is
+   * also what lets the draw loop park on a map nobody is exploring.
    */
+  // The 10s tick re-evaluates recency, but the ANSWER is usually the same one
+  // as ten seconds ago. Handing back the previous array when the live set has
+  // not actually changed keeps `routes`, `drawn` and the packet list identical,
+  // which is what stops the tick waking the draw loop for one pointless frame
+  // every ten seconds on a map where nobody is working.
+  const liveRef = useRef({ sig: null, rows: [] })
   const liveSessionRows = useMemo(() => {
     const now = Date.now()
-    return sessionRows.filter((a) => !!a.online && now - tsMs(a.lastAt) < AGENT_LIVE_MS)
+    const rows = sessionRows.filter((a) => !!a.online && now - tsMs(a.lastAt) < AGENT_LIVE_MS)
+    const sig = rows.map((a) => String(a.session || '')).join('|')
+    if (sig === liveRef.current.sig) return liveRef.current.rows
+    liveRef.current = { sig, rows }
+    return rows
   }, [sessionRows, tick])
 
   const liveKeys = useMemo(
@@ -228,31 +268,46 @@ export function RoomProvider({ children }) {
     [liveSessionRows]
   )
 
-  /** actor id -> colour slot. Slot 0 is the main agent and is never in here. */
-  const actorSlots = useMemo(() => assignSlots(liveSessionRows), [liveSessionRows])
+  /**
+   * actor id -> colour slot. Slot 0 is the main agent and is never in here.
+   *
+   * Live rows are offered first so whoever is working now takes the four bright
+   * slots; the full history follows so a run that has ENDED still has a colour
+   * for its route and its outlines. Both lists are already sorted by the
+   * server's autoInc, so every tab lands on the same assignment.
+   */
+  const actorSlots = useMemo(
+    () => assignSlots([...liveSessionRows, ...sessionRows]),
+    [liveSessionRows, sessionRows]
+  )
 
   /**
-   * Composite session key -> colour slot, or NEUTRAL_SLOT.
+   * Composite session key -> the ACTOR's colour slot.
    *
-   * `node_cov.last_session` is a HISTORICAL row: it names whoever touched a
-   * node last, hours ago or right now, indifferently. Painting straight from it
-   * is what put full subagent colour on a repo with nothing connected. A key
-   * that is not in `liveKeys` gets neutral ink, and the file still reads as
-   * explored — because it is — just not as somebody's live position.
+   * No liveness gate. This used to return NEUTRAL_SLOT for anything not in
+   * `liveKeys`, which meant a run's own territory turned grey two minutes after
+   * it paused — including under `?session=<id>`, the one URL whose entire
+   * purpose is showing you a run that has already finished. Identity does not
+   * expire; only presence does, and presence is `liveOfSession` below.
    */
   const slotOfSession = useCallback((composite) => {
     const k = String(composite || '')
-    if (!k || !liveKeys.has(k)) return NEUTRAL_SLOT
+    if (!k) return NEUTRAL_SLOT
     const { actor } = splitSession(k)
     if (!actor) return 0
     return actorSlots.get(actor) ?? OTHER_SLOT
-  }, [actorSlots, liveKeys])
+  }, [actorSlots])
+
+  /** Composite session key -> is that actor reporting right now. */
+  const liveOfSession = useCallback((composite) => liveKeys.has(String(composite || '')), [liveKeys])
 
   /**
    * Per-file coverage rolled up from node_cov. `lit` is how many of a file's
-   * nodes have been touched; `at` is the newest touch in it, which is what the
-   * map uses to bloom a region the instant it lights; `slot` is WHICH AGENT
-   * touched it last, which is what the map paints it in.
+   * nodes have been touched; `at` is the newest touch in it — the clock the
+   * FILL is read off, green through red; `slot` is which agent touched it last,
+   * which the OUTLINE and the route are drawn in; `isNew` is ground that did
+   * not exist when the survey was cut, and it stays blue no matter how cold it
+   * gets.
    */
   const coverage = useMemo(() => {
     const files = territory.files
@@ -260,6 +315,7 @@ export function RoomProvider({ children }) {
     const at = new Float64Array(files.length)
     const tool = new Array(files.length).fill('')
     const slot = new Int8Array(files.length).fill(NEUTRAL_SLOT)
+    const isNew = new Uint8Array(files.length)
     const slotByNode = new Map()
     const exploredIds = new Set()
     let exploredNodes = 0
@@ -273,18 +329,19 @@ export function RoomProvider({ children }) {
       const fi = territory.byNode.get(nid)
       if (fi === undefined) continue
       lit[fi] += 1
+      if (nodeSplit.fresh.has(nid)) isNew[fi] = 1
       const ms = tsMs(c.lastAt)
       if (ms > at[fi]) { at[fi] = ms; tool[fi] = c.lastTool || ''; slot[fi] = sl }
     }
     let exploredFiles = 0
     for (let i = 0; i < lit.length; i += 1) if (lit[i] > 0) exploredFiles += 1
     return {
-      lit, at, tool, slot, slotByNode, exploredNodes, exploredFiles, exploredIds,
+      lit, at, tool, slot, isNew, slotByNode, exploredNodes, exploredFiles, exploredIds,
       totalNodes: territory.total,
       totalFiles: files.length,
       unresolved: covRows.length - exploredNodes,
     }
-  }, [covRows, territory, slotOfSession])
+  }, [covRows, territory, slotOfSession, nodeSplit.fresh])
 
   // The edge rows, with an identity that changes ONLY when the graph does.
   const edgeN = store.count('edge')
@@ -309,8 +366,9 @@ export function RoomProvider({ children }) {
     repoId: repo ? key(repo.id) : null,
     session: QUERY_SESSION,
     slotOf: slotOfSession,
+    liveOf: liveOfSession,
     colourOf: slotColor,
-  }), [touchRows, repo, slotOfSession])
+  }), [touchRows, repo, slotOfSession, liveOfSession])
 
   /** Every step of every route in server order — the tape, and the scrub ruler. */
   const timeline = useMemo(() => timelineOf(routes), [routes])
@@ -322,13 +380,14 @@ export function RoomProvider({ children }) {
   const districtStats = useMemo(() => {
     const out = atlas.districts.map((d) => ({
       name: d.name, code: d.code, total: d.count, lit: 0, symbols: d.symbols,
-      slot: NEUTRAL_SLOT, at: 0,
+      slot: NEUTRAL_SLOT, at: 0, isNew: 0,
     }))
     atlas.districts.forEach((d, di) => {
       const o = out[di]
       for (const fi of d.files) {
         if (coverage.lit[fi] > 0) {
           o.lit += 1
+          if (coverage.isNew[fi]) o.isNew = 1
           if (coverage.at[fi] > o.at) { o.at = coverage.at[fi]; o.slot = coverage.slot[fi] }
         }
       }
@@ -585,7 +644,11 @@ export function RoomProvider({ children }) {
     // v2 — the coverage loop
     territory, coverage, requests, requestsByFile, agents, actors, touches,
     // the atlas
-    atlas, routes, timeline, districtStats, liveKeys,
+    atlas, routes, timeline, districtStats, liveKeys, liveOfSession,
+    // The clock the fade is read against. It advances on the same 10s tick that
+    // re-evaluates liveness, so a block cooling from green to red costs one
+    // memo per ten seconds and nothing per frame.
+    now: nowFade,
     sessionFilter: QUERY_SESSION,
     requestExploration, covState, covError,
     canRequest: !!apiRef.current?.hasReducer?.('request_exploration'),

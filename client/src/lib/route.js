@@ -24,13 +24,19 @@ import { splitSession } from './actors'
  * @param opts.repoId  keep only this repo (string key)
  * @param opts.session keep only this session (the bare uuid; subagents of it
  *                     are kept too, since they share it)
- * @param opts.slotOf  composite key -> colour slot (already liveness-gated)
+ * @param opts.slotOf  composite key -> colour slot. NOT liveness-gated: a
+ *                     finished run keeps its actor's colour, which is the whole
+ *                     point of `?session=<id>`.
+ * @param opts.liveOf  composite key -> is that actor reporting right now. This
+ *                     is the channel liveness travels on now that it no longer
+ *                     rides the colour: only a live route gets a moving packet,
+ *                     which is also what lets the draw loop park.
  * @param opts.colourOf slot -> hex, or null for neutral ink
- * @returns [{ key, session, actor, isMain, slot, colour, steps: [...] }]
+ * @returns [{ key, session, actor, isMain, slot, colour, live, steps: [...] }]
  *          trunk first, then branches in order of first appearance.
  */
 export function routesFor(touchRows, opts = {}) {
-  const { repoId = null, session = null, slotOf, colourOf } = opts
+  const { repoId = null, session = null, slotOf, colourOf, liveOf } = opts
   const groups = new Map()
 
   for (const t of touchRows || []) {
@@ -69,6 +75,7 @@ export function routesFor(touchRows, opts = {}) {
       isMain: g.isMain,
       slot,
       colour: colourOf ? colourOf(slot) : null,
+      live: liveOf ? !!liveOf(g.key) : false,
       steps,
       firstId: steps.length ? steps[0].id : '0',
       lastAt: steps.length ? steps[steps.length - 1].at : 0,
@@ -107,7 +114,7 @@ export function routesFor(touchRows, opts = {}) {
 export function timelineOf(routes) {
   const all = []
   for (const r of routes) {
-    for (const s of r.steps) all.push({ ...s, route: r.key, slot: r.slot, colour: r.colour, actor: r.actor })
+    for (const s of r.steps) all.push({ ...s, route: r.key, slot: r.slot, colour: r.colour, actor: r.actor, live: r.live })
   }
   all.sort((a, b) => cmpBig(a.id, b.id))
   all.forEach((s, i) => { s.k = i + 1 })
@@ -121,6 +128,11 @@ export function timelineOf(routes) {
  *
  * `blockOf(step)` resolves a step to a block, or null when the touch missed the
  * survey (`node_id = 0`, a path the graph does not hold).
+ *
+ * THE LIVE WIRE USES THIS TOO, on a two-step route made of the previous touch
+ * and the one that just arrived. There is exactly one path builder on this map
+ * and this is the door to it: the flash between consecutive reads and the
+ * persistent route can never disagree about where a hop goes.
  */
 export function hopsOf(route, blockOf) {
   const hops = []

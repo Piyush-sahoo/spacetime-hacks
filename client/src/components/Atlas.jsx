@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, use
 import { useRoom } from '../lib/room.jsx'
 import { P, pts, boundsOf, gridRange, hopPath, pointAt } from '../lib/iso'
 import { hopsOf } from '../lib/route'
-import { NEUTRAL_SLOT, slotColor } from '../lib/actors'
+import { NEUTRAL_SLOT, slotColor, stateColour, stateOf, STATE_LABEL } from '../lib/actors'
 
 /**
  * THE MAP — a repo as an isometric plate, and an agent's route across it.
@@ -31,6 +31,19 @@ import { NEUTRAL_SLOT, slotColor } from '../lib/actors'
 const HALO_MS = 2400
 const MIN_K = 0.35
 const MAX_K = 3
+
+// ── the live wire ───────────────────────────────────────────────────────────
+// How long a wire between two consecutive reads lives, how long it takes to
+// draw itself from the previous block to the new one, and how many may be on
+// screen at once before the oldest is dropped.
+const WIRE_MS = 5000
+const WIRE_DRAW_MS = 520
+const MAX_WIRES = 8
+// A wire is a FLASH, not a record. On a reconnect the whole tape arrives at
+// once; anything that already happened longer ago than this is history and the
+// persistent route is where it belongs.
+const WIRE_FRESH_MS = 15000
+const SVGNS = 'http://www.w3.org/2000/svg'
 // django/django is 695 districts. The whole plate has to be allowed to fit —
 // at that size the map is a skyline you read the SHAPE of, and the left index
 // is how you get inside one. A floor of 0.2 cropped it to a corner.
@@ -137,17 +150,43 @@ function bodyOf(b, fill, fillOpacity, sw, ghost) {
  * Memoised on primitives only, so a coverage tick re-renders the handful of
  * blocks that actually changed and walks past the other 2,973.
  */
-const Block = memo(function Block({ b, lit, colour, sel, fresh }) {
+/**
+ * TWO CHANNELS, TWO QUESTIONS.
+ *
+ * `colour` is the FILL and it answers *when*: green where an agent is standing,
+ * fading to red over five minutes, blue for ground that did not exist when the
+ * survey was cut, and no fill at all for a file nobody has ever opened.
+ *
+ * `edge` is the OUTLINE and it answers *who*: the actor that touched it last,
+ * in the same hue its route is drawn in. Green fill with a periwinkle edge is
+ * "being worked on right now, by subagent 2". The outline is always-on and is
+ * a different element from `.hl`, which is the hover highlight and stays
+ * hidden until the pointer is over the block.
+ */
+const Block = memo(function Block({ b, lit, colour, edge, sel, fresh }) {
   const ghost = !lit
   const sw = sel ? 2 : 1.2
   const fill = ghost ? 'none' : (colour || 'var(--face)')
-  const fo = ghost ? 1 : (colour ? 0.42 : 1)
+  // A temporal fill has to read from the far side of the room against a khaki
+  // plate in light and an olive one in dark, which 0.42 did not do.
+  const fo = ghost ? 1 : (colour ? 0.58 : 1)
   const { gx, gy, w, d, h } = b
   const top = [P(gx, gy, h), P(gx + w, gy, h), P(gx + w, gy + d, h), P(gx, gy + d, h)]
   const c = P(gx + w / 2, gy + d / 2, h)
   return (
     <g className={`node${sel ? ' sel' : ''}`} data-id={b.id} style={{ cursor: 'pointer' }}>
       {bodyOf(b, fill, fo, sw, ghost)}
+      {edge && !sel && (
+        <polygon
+          className="edge"
+          points={pts(top)}
+          fill="none"
+          stroke={edge}
+          strokeWidth={2.2}
+          strokeLinejoin="round"
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
       <polygon
         className="hl"
         points={pts(top)}
@@ -224,15 +263,23 @@ const Tag = memo(function Tag({ b, lit, sel }) {
 export default function Atlas({
   handle, scope, selected, onSelect, onDrill, playing, cursor, onStepPick,
 }) {
-  const { atlas, coverage, territory, routes, timeline, requestsByFile } = useRoom()
+  const { atlas, coverage, territory, routes, timeline, requestsByFile, now } = useRoom()
   const svgRef = useRef(null)
   const worldRef = useRef(null)
   const pktRef = useRef(null)
+  const wireRef = useRef(null)
   const tipRef = useRef(null)
   const cam = useRef({ tx: 0, ty: 0, k: 1 })
   const tween = useRef(null)
   const rafRef = useRef(0)
   const packets = useRef([])
+  // The live wires, and the bookkeeping that decides when one is born. All of
+  // it is refs: a wire must never become React state, because state is a
+  // re-render and a re-render detaches whatever the pointer is over.
+  const wires = useRef([])
+  const wireSeen = useRef(new Set())
+  const wireLast = useRef(new Map())
+  const wirePrimed = useRef(false)
   const stats = useRef({ paints: 0, ms: 0, max: 0, ticks: 0 })
   const frameRef = useRef(() => {})
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -291,12 +338,13 @@ export default function Atlas({
     return { allow, touched }
   }, [cursor, timeline, territory])
 
-  /** per-scene-block: is it lit, whose colour, when did it light. */
+  /** per-scene-block: is it lit, when did it light, whose it is, is it new. */
   const paint = useMemo(() => {
     const n = scene.blocks.length
     const lit = new Uint8Array(n)
     const slot = new Int8Array(n).fill(NEUTRAL_SLOT)
     const at = new Float64Array(n)
+    const isNew = new Uint8Array(n)
     const asked = new Uint8Array(n)
     const seen = (fi) => {
       if (!coverage.lit[fi]) return false
@@ -309,13 +357,25 @@ export default function Atlas({
       if (requestsByFile.has(fi) && requestsByFile.get(fi).status !== 'done') asked[bi] = 1
       if (!seen(fi)) continue
       lit[bi] = 1
+      if (coverage.isNew[fi]) isNew[bi] = 1
       if (coverage.at[fi] > at[bi]) { at[bi] = coverage.at[fi]; slot[bi] = coverage.slot[fi] }
     }
-    return { lit, slot, at, asked }
+    return { lit, slot, at, isNew, asked }
   }, [scene, blockByFile, coverage, rewound, atlas, requestsByFile])
 
-  // The one hue. `slotColor` returns null for the neutral slot, and the neutral
-  // slot is the only thing an offline session can ever resolve to.
+  /**
+   * THE CLOCK THE FILL IS READ AGAINST.
+   *
+   * Sampled when coverage moves — so a touch that lands is green in the same
+   * paint — and again on the room's 10s tick, which is what walks a block down
+   * the green-to-red fade. Nothing here runs per frame: the fade is quantised
+   * to 24 steps, so a cooling block hands `Block` a new prop roughly every
+   * eleven seconds and the other 2,973 memoise straight past.
+   */
+  const paintNow = useMemo(() => Date.now(), [now, coverage])
+
+  // WHO, for the outline and the route. `slotColor` returns null for the
+  // neutral slot — a touch whose actor could not be resolved at all.
   const colourOfSlot = slotColor
 
   // ── new this moment ───────────────────────────────────────────────────────
@@ -347,7 +407,10 @@ export default function Atlas({
     }).filter((x) => x.hops.length)
   }, [routes, timeline, cursor, nodeToBlock])
 
-  const liveDrawn = useMemo(() => drawn.filter((d) => d.route.slot >= 0), [drawn])
+  // ONLY A CONNECTED AGENT GETS A PACKET. A route nobody is walking any more
+  // is a drawn line, not a moving dot — which is also exactly what lets the rAF
+  // chain park on a map full of finished routes.
+  const liveDrawn = useMemo(() => drawn.filter((d) => d.route.live), [drawn])
 
   // ── camera ────────────────────────────────────────────────────────────────
   const applyView = useCallback(() => {
@@ -448,6 +511,129 @@ export default function Atlas({
     })
   }, [liveDrawn])
 
+  // ── the live wire ─────────────────────────────────────────────────────────
+  /**
+   * THE MOVE THAT JUST HAPPENED.
+   *
+   * The persistent route says where an agent has been. This says where it went
+   * one second ago: a bright wire snaps from the previous file to the one that
+   * just arrived, draws itself in the direction of travel, holds, and fades out
+   * over five seconds. It is what pulls the eye to the right corner of a large
+   * map at the moment something occurs.
+   *
+   * It is built out of `hopsOf` on a two-step route, so the flash and the
+   * persistent line come from the SAME path builder and cannot disagree about
+   * where a hop goes or which way it bends.
+   *
+   * Every part of this is imperative. The wires are ref state, their elements
+   * are created with `createElementNS` into an overlay `<g>` React renders
+   * empty and never diffs, and the animation runs inside the existing rAF
+   * frame. A wire therefore costs ZERO React renders — the canvas is not
+   * allowed to re-render on one, for the same reason it is not allowed to
+   * re-render on a hover.
+   */
+  const clearWires = useCallback(() => {
+    const g = wireRef.current
+    if (g) while (g.firstChild) g.removeChild(g.firstChild)
+    wires.current = []
+  }, [])
+
+  /** One frame of every live wire. Returns whether any are still alive. */
+  const stepWires = useCallback((tNow) => {
+    const list = wires.current
+    if (!list.length) return false
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const w = list[i]
+      const age = tNow - w.born
+      if (age >= WIRE_MS) { w.el.remove(); list.splice(i, 1); continue }
+      // DIRECTION IS THE POINT. The line is dashed with one dash as long as
+      // itself and the offset is walked to zero, so it unrolls from the block
+      // the agent left towards the block it arrived at.
+      const draw = Math.min(1, age / WIRE_DRAW_MS)
+      w.el.setAttribute('opacity', (1 - age / WIRE_MS).toFixed(3))
+      w.line.setAttribute('stroke-dashoffset', (w.path.len * (1 - draw)).toFixed(2))
+      const [x, y] = pointAt(w.path, draw)
+      w.head.setAttribute('transform', `translate(${x.toFixed(2)},${y.toFixed(2)})`)
+    }
+    return list.length > 0
+  }, [])
+
+  // A new scene is a different set of coordinates, so anything mid-flight is
+  // pointing at ground that is no longer there.
+  useEffect(() => clearWires(), [scene, clearWires])
+
+  useEffect(() => {
+    const seen = wireSeen.current
+    const last = wireLast.current
+    const primed = wirePrimed.current
+    const wall = Date.now()
+    const fresh = []
+    // `timeline` is every step of every route in the server's own order, so
+    // "the previous touch by the SAME actor" is just the last one seen on that
+    // composite key.
+    for (const st of timeline) {
+      if (seen.has(st.id)) continue
+      seen.add(st.id)
+      const prev = last.get(st.route)
+      last.set(st.route, st)
+      // The FIRST pass is priming, not drawing: the whole tape arrives at once
+      // on load and six hundred wires is a seizure, not a map.
+      if (!primed) continue
+      if (cursor != null) continue
+      if (!prev || prev.nodeId === st.nodeId) continue
+      if (wall - st.at > WIRE_FRESH_MS) continue
+      fresh.push({ prev, st })
+    }
+    wirePrimed.current = true
+    const g = wireRef.current
+    if (!fresh.length || !g) return
+
+    for (const { prev, st } of fresh) {
+      // ONE PATH BUILDER. A two-step route through the same function the
+      // persistent line uses; it also drops the hop for free when either end
+      // is off the map (`node_id = 0`, or a block outside this scene).
+      const hops = hopsOf({ steps: [prev, st] }, (x) => nodeToBlock(x.nodeId))
+      if (!hops.length) continue
+      const h = hops[0]
+      const path = hopPath(h.from, h.to, h.bend)
+      if (!path.len) continue
+      const colour = st.colour || 'var(--ink)'
+
+      const el = document.createElementNS(SVGNS, 'g')
+      const line = document.createElementNS(SVGNS, 'polyline')
+      line.setAttribute('points', pts(path.scr))
+      line.setAttribute('fill', 'none')
+      line.setAttribute('stroke', colour)
+      line.setAttribute('stroke-width', '3.4')
+      line.setAttribute('stroke-linecap', 'round')
+      line.setAttribute('stroke-linejoin', 'round')
+      line.setAttribute('stroke-dasharray', String(path.len))
+      line.setAttribute('stroke-dashoffset', String(path.len))
+      el.appendChild(line)
+      // The ink diamond at the corner, the same mark the routes wear.
+      for (const c of path.scr.slice(1, -1)) {
+        const dia = document.createElementNS(SVGNS, 'polygon')
+        dia.setAttribute('points', pts([[c[0], c[1] - 4], [c[0] + 4, c[1]], [c[0], c[1] + 4], [c[0] - 4, c[1]]]))
+        dia.setAttribute('fill', colour)
+        el.appendChild(dia)
+      }
+      const head = document.createElementNS(SVGNS, 'polygon')
+      head.setAttribute('points', '0,-6 6,0 0,6 -6,0')
+      head.setAttribute('fill', colour)
+      head.setAttribute('stroke', 'var(--paper)')
+      head.setAttribute('stroke-width', '1.4')
+      el.appendChild(head)
+      g.appendChild(el)
+
+      wires.current.push({ el, line, head, path, born: performance.now() })
+      // Oldest first out, so a burst of tool calls reads as a moving front
+      // rather than a ball of string.
+      while (wires.current.length > MAX_WIRES) wires.current.shift().el.remove()
+    }
+    stepWires(performance.now())
+    wake()
+  }, [timeline, cursor, nodeToBlock, stepWires, wake])
+
   const drawPackets = useCallback(() => {
     const g = pktRef.current
     if (!g) return
@@ -504,7 +690,12 @@ export default function Atlas({
         if (moving) drawPackets()
       }
 
-      if (tween.current || moving) rafRef.current = requestAnimationFrame(frameRef.current)
+      // Wires animate whether or not the tape is playing — they are what is
+      // happening now, not a replay of it. `stepWires` returns false the frame
+      // the last one expires, and the chain ends right there.
+      const wiring = stepWires(ts || performance.now())
+
+      if (tween.current || moving || wiring) rafRef.current = requestAnimationFrame(frameRef.current)
     }
     // A subscription arrival, a resize, a scene change: paint now, do not wait
     // for a mouse move.
@@ -514,7 +705,7 @@ export default function Atlas({
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0
     }
-  }, [playing, liveDrawn, drawPackets, applyView, wake])
+  }, [playing, liveDrawn, drawPackets, applyView, wake, stepWires])
 
   useEffect(() => { applyView() }, [applyView, scene])
 
@@ -564,7 +755,8 @@ export default function Atlas({
     const n = scene.level === 'district'
       ? `${b.count} files`
       : `${b.count} symbol${b.count === 1 ? '' : 's'}`
-    tip.textContent = `${b.name} — ${lit ? 'explored' : 'never opened'} · ${n}`
+    const st = lit ? stateOf(paint.at[bi], paint.isNew[bi], Date.now()) : 'dark'
+    tip.textContent = `${b.name} — ${STATE_LABEL[st]} · ${n}`
     tip.style.display = 'block'
     const r = svgRef.current.getBoundingClientRect()
     let x = e.clientX - r.left + 14, y = e.clientY - r.top + 14
@@ -662,7 +854,8 @@ export default function Atlas({
       /** THE STABILITY PROOF. Screen position of a block, to six decimals. */
       probe: (idOrPath) => {
         const i = scene.blocks.findIndex(
-          (x) => x.id === idOrPath || x.path === idOrPath || x.name === idOrPath || x.district === idOrPath
+          (x) => x.id === idOrPath || x.path === idOrPath || x.mod === idOrPath
+            || x.name === idOrPath || x.district === idOrPath
         )
         if (i < 0) return null
         const b = scene.blocks[i]
@@ -672,6 +865,10 @@ export default function Atlas({
           id: b.id, name: b.name, gx: b.gx, gy: b.gy, h: b.h,
           sx: p[0] * c.k + c.tx, sy: p[1] * c.k + c.ty,
           lit: paint.lit[i], slot: paint.slot[i], k: c.k,
+          state: paint.lit[i] ? stateOf(paint.at[i], paint.isNew[i], Date.now()) : 'dark',
+          fill: paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], Date.now()) : null,
+          edge: paint.lit[i] ? slotColor(paint.slot[i]) : null,
+          at: paint.at[i],
         }
       },
       diag: () => ({
@@ -683,6 +880,7 @@ export default function Atlas({
         liveRoutes: liveDrawn.length,
         steps: timeline.length,
         hops: drawn.reduce((a, d) => a + d.hops.length, 0),
+        wires: wires.current.length,
         lit: paint.lit.reduce((a, x) => a + x, 0),
         ticks: stats.current.ticks,
         paints: stats.current.paints,
@@ -741,7 +939,9 @@ export default function Atlas({
           <g>
             {drawn.map((d) => {
               const col = d.route.colour || 'var(--ink)'
-              const dead = d.route.slot < 0
+              // A finished run keeps its colour and gets a thinner dashed line:
+              // the same agent, no longer standing on it.
+              const dead = !d.route.live
               return (
                 <g key={d.route.key}>
                   {d.hops.map((h) => (
@@ -778,7 +978,8 @@ export default function Atlas({
                   key={b.id}
                   b={b}
                   lit={!!paint.lit[i]}
-                  colour={colourOfSlot(paint.slot[i])}
+                  colour={paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], paintNow) : null}
+                  edge={paint.lit[i] ? colourOfSlot(paint.slot[i]) : null}
                   sel={selBlock === b.id}
                   fresh={paint.at[i] > 0 && nowMs - paint.at[i] < HALO_MS}
                 />
@@ -822,6 +1023,14 @@ export default function Atlas({
               </g>
             ))}
           </g>
+
+          {/*
+            THE OVERLAY. Above everything on the plate, never hit-tested, and
+            rendered EMPTY on purpose: its children are created imperatively so
+            that a wire arriving costs the canvas zero re-renders. React has no
+            children of its own here, so it never diffs them away.
+          */}
+          <g id="wires" ref={wireRef} style={{ pointerEvents: 'none' }} />
         </g>
       </svg>
       <div id="tip" ref={tipRef} />

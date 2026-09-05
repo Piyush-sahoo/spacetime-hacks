@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { slotColor } from '../lib/actors'
+import { stateColour } from '../lib/actors'
 
 /**
  * THE INDEX — directories, with how much of each the agent has actually seen.
@@ -11,9 +11,12 @@ import { slotColor } from '../lib/actors'
  *
  * A directory nobody has ever opened is drawn DASHED and unshadowed — the same
  * grammar the canvas uses for a dark block, because it means the same thing.
+ * The swatch is the same clock the canvas paints with, too: green where an
+ * agent is standing, red where it has been, blue for new ground. The index and
+ * the plate must never disagree about what a colour means.
  */
 export default function LeftIndex({ scope, onScope, selected, onSelect }) {
-  const { atlas, districtStats, coverage } = useRoom()
+  const { atlas, districtStats, coverage, now } = useRoom()
   const [q, setQ] = useState('')
 
   const rows = useMemo(() => {
@@ -50,7 +53,7 @@ export default function LeftIndex({ scope, onScope, selected, onSelect }) {
             const f = atlas.files[fi]
             const lit = coverage.lit[fi] > 0
             const b = atlas.blocks[atlas.byFile.get(fi)]
-            const colour = lit ? slotColor(coverage.slot[fi]) : null
+            const colour = lit ? stateColour(coverage.at[fi], coverage.isNew[fi], now) : null
             return (
               <button
                 key={fi}
@@ -70,7 +73,7 @@ export default function LeftIndex({ scope, onScope, selected, onSelect }) {
           <h4>Directories · lit / files</h4>
           {rows.map((d) => {
             const dark = d.lit === 0
-            const colour = slotColor(d.slot)
+            const colour = d.lit ? stateColour(d.at, d.isNew, now) : null
             return (
               <button
                 key={d.name}

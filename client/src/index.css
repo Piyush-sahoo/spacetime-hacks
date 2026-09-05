@@ -294,6 +294,11 @@ button.ctl:disabled { opacity: .4; cursor: default; box-shadow: none; }
 }
 #legend .lg i { width: 9px; height: 9px; border: 1px solid var(--ink); display: block; }
 #legend .lg.dead { border-style: dashed; color: var(--ink-2); }
+/* The fade itself, so the key shows the gradient rather than describing it. */
+#legend .lg i.fade { background: linear-gradient(90deg, #22c55e, #ef4444); }
+/* An actor's swatch is an OUTLINE, because on the map an actor is an outline. */
+#legend .lg i.edge { background: transparent; border-width: 2.5px; border-style: solid; }
+#legend .lg.who { border-style: dotted; color: var(--ink-2); letter-spacing: .16em; }
 
 #tip {
   position: absolute; pointer-events: none;

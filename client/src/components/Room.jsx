@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { actorLabel } from '../lib/actors'
+import { actorLabel, STATE_LIVE, STATE_COLD, STATE_NEW } from '../lib/actors'
 import Atlas from './Atlas.jsx'
 import TopStrip from './TopStrip.jsx'
 import LeftIndex from './LeftIndex.jsx'
@@ -195,15 +195,33 @@ export default function Room({ onLeave }) {
             <button onClick={() => atlasRef.current?.fit?.(true)} aria-label="Fit">&#10530;</button>
           </div>
 
+          {/*
+            THE KEY, IN TWO HALVES, BECAUSE THE MAP SAYS TWO THINGS.
+
+            FILL IS WHEN — green where an agent is standing, fading to red over
+            five minutes, blue for ground that did not exist when the map was
+            cut, nothing at all for a file nobody has opened. Read it from
+            across the room.
+
+            OUTLINE IS WHO — and only agents that are actually reporting are
+            listed here. A legend with nothing in it is the correct drawing of a
+            room with nobody in it, which is why there is no fallback that fills
+            it with agents who left an hour ago.
+          */}
           <div id="legend">
+            <span className="lg"><i style={{ background: STATE_LIVE }} />Agent here now</span>
+            <span className="lg"><i className="fade" />Cooling · 30s → 5m</span>
+            <span className="lg"><i style={{ background: STATE_COLD }} />Gone cold</span>
+            <span className="lg"><i style={{ background: STATE_NEW }} />New ground</span>
+            <span className="lg dead">Dashed · never opened</span>
+            {actors.length > 0 && <span className="lg who">Live right now</span>}
             {actors.map((a) => (
               <span className="lg" key={a.actorId || 'main'}>
-                <i style={{ background: a.color }} />
+                <i className="edge" style={{ borderColor: a.color, color: a.color }} />
                 {a.actorId ? actorLabel(a.actorId) : (a.name || 'main agent')}
               </span>
             ))}
             {!actors.length && <span className="lg dead">No agent connected</span>}
-            <span className="lg dead">Dashed · never opened</span>
             {isMock && <span className="lg dead">Mock fixture</span>}
             {disconnected && (
               <button className="lg" onClick={retry} style={{ cursor: 'pointer' }}>

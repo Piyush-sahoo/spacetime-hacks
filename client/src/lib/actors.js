@@ -15,17 +15,19 @@
  */
 
 /**
- * An actor's colour is THE ONLY HUE IN THE PRODUCT. Everything else — paper,
- * ink, rules, plates, blocks — is monochrome, which is precisely what makes a
- * live route pop off the plate.
+ * An actor's colour answers WHO. It is carried by the ROUTE LINE and by the
+ * block OUTLINE — never by the fill, which answers *when* (the temporal state
+ * machine at the bottom of this file owns that).
  *
- * Because it is the only hue, it must never be spent on a lie. A colour on the
- * map is a promise that an agent is connected RIGHT NOW; a session that has
- * stopped reporting gets `NEUTRAL_SLOT` and reads as plain ink.
+ * An actor keeps its colour after its run ends, because a finished route is
+ * still that agent's route and `?session=<id>` exists to show you exactly that.
+ * Liveness is drawn separately and honestly: the left rail and the legend list
+ * only agents that reported inside `AGENT_LIVE_MS`, and only a live route
+ * carries a moving packet.
  */
 export const MAIN_COLOR = '#C2410C'
 
-/** Explored, but nobody live is standing there. Ink, not a hue. */
+/** No actor could be resolved at all. Ink, not a hue. */
 export const NEUTRAL_SLOT = -1
 
 /**
@@ -93,22 +95,109 @@ export function actorShort(actor) {
  * without any coordination, and a new subagent appearing can only take the next
  * free slot rather than reshuffling the ones already on screen.
  *
- * ONLY LIVE ROWS BELONG IN HERE. An `agent_session` row is never deleted and
- * `online` is not reliably cleared, so feeding this every row that ever existed
- * is what used to paint a repo in full subagent colour with nothing connected.
- * The caller filters; this function assumes the filter already happened.
+ * LIVE ACTORS ARE OFFERED FIRST. The caller passes the live rows ahead of the
+ * full history, and an actor already holding a slot is skipped, so whoever is
+ * working right now takes the four bright slots and everyone who has finished
+ * takes whatever is left. That ordering matters because a repo with twenty
+ * historical subagents would otherwise push the one live agent into the grey
+ * tail. It is still derived from server-assigned row ids alone, so every tab
+ * computes the same assignment with no coordination.
  *
- * @param liveSessionRows live agent_session rows, ALREADY sorted by row id asc
+ * @param sessionRows agent_session rows, live ones first, each run sorted by id asc
  * @returns Map(actor -> slot)
  */
-export function assignSlots(liveSessionRows) {
+export function assignSlots(sessionRows) {
   const slots = new Map()
   let next = 1
-  for (const r of liveSessionRows) {
+  for (const r of sessionRows) {
     const { actor } = splitSession(r.session)
     if (!actor || slots.has(actor)) continue
     slots.set(actor, next <= MAX_ACTOR_COLORS ? next : OTHER_SLOT)
     if (next <= MAX_ACTOR_COLORS) next += 1
   }
   return slots
+}
+
+/* ── WHEN IT WAS LIT ────────────────────────────────────────────────────────
+ *
+ * COLOUR MEANS *WHEN*, NOT *WHO*.
+ *
+ * The fill of a block is a clock, not a name. Green is "an agent is standing
+ * here right now", red is "somebody has been here and left", blue is "this file
+ * did not exist when the map was cut", and no fill at all is "nobody has ever
+ * opened this". Between green and red there is a continuous fade, so a glance
+ * from the far side of the room tells you where the work IS rather than where
+ * it has ever been.
+ *
+ * Everything that was ever touched keeps a colour FOREVER. The old rule — hue
+ * only while a session is connected — is what made a finished run go grey, and
+ * it took `?session=<id>` down with it: the one URL whose entire purpose is
+ * showing you a run that has already ended.
+ *
+ * WHO is still on the map. It moved to the OUTLINE and to the route line, both
+ * of which are drawn in the actor's colour, so a block being worked on right
+ * now by subagent #2 is green with a periwinkle edge and a periwinkle route
+ * leading to it.
+ */
+
+/** An agent is standing here. */
+export const STATE_LIVE = '#22c55e'
+/** Explored, and nobody has been back. */
+export const STATE_COLD = '#ef4444'
+/** Minted after the survey — this ground is new. */
+export const STATE_NEW = '#3b82f6'
+
+/** Full green under this age. */
+export const TOUCH_LIVE_MS = 30000
+/** Fully red past this one. Between the two it fades. */
+export const TOUCH_COLD_MS = 300000
+
+const LIVE_RGB = [34, 197, 94]
+const COLD_RGB = [239, 68, 68]
+
+/**
+ * The fade is QUANTISED to 24 steps on purpose.
+ *
+ * Blocks are memoised on their props, and the fill is a prop. A continuous
+ * value would hand every cooling block a new string on every tick and re-render
+ * all of them; 24 steps across four and a half minutes is finer than the eye
+ * resolves and lets the memo do its job.
+ */
+const FADE_STEPS = 24
+
+/** 'dark' | 'live' | 'cooling' | 'cold' | 'new'. `at` is ms, 0 for untouched. */
+export function stateOf(at, isNew, now) {
+  // Blue beats red: "new" is a property of the FILE, "cold" is a property of
+  // attention. A file created ten minutes ago and not looked at since is still
+  // new ground.
+  if (isNew) return 'new'
+  if (!at) return 'dark'
+  const age = now - at
+  if (age < TOUCH_LIVE_MS) return 'live'
+  if (age >= TOUCH_COLD_MS) return 'cold'
+  return 'cooling'
+}
+
+/** The fill for a block, or `null` for ground nobody has ever opened. */
+export function stateColour(at, isNew, now) {
+  const s = stateOf(at, isNew, now)
+  if (s === 'dark') return null
+  if (s === 'new') return STATE_NEW
+  if (s === 'live') return STATE_LIVE
+  if (s === 'cold') return STATE_COLD
+  const raw = (now - at - TOUCH_LIVE_MS) / (TOUCH_COLD_MS - TOUCH_LIVE_MS)
+  const u = Math.round(Math.max(0, Math.min(1, raw)) * FADE_STEPS) / FADE_STEPS
+  const r = Math.round(LIVE_RGB[0] + (COLD_RGB[0] - LIVE_RGB[0]) * u)
+  const g = Math.round(LIVE_RGB[1] + (COLD_RGB[1] - LIVE_RGB[1]) * u)
+  const b = Math.round(LIVE_RGB[2] + (COLD_RGB[2] - LIVE_RGB[2]) * u)
+  return `rgb(${r},${g},${b})`
+}
+
+/** What the tooltip and the panel call each state. */
+export const STATE_LABEL = {
+  dark: 'never opened',
+  live: 'an agent is here now',
+  cooling: 'cooling',
+  cold: 'explored, gone cold',
+  new: 'new ground',
 }

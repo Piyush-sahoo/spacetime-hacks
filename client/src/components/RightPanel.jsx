@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
 import { key, num, idHex, tsMs } from '../lib/util'
-import { actorLabel, slotColor } from '../lib/actors'
+import { actorLabel, slotColor, stateColour, stateOf, STATE_LABEL } from '../lib/actors'
 import NodeList from './NodeList.jsx'
 import WalkView from './WalkView.jsx'
 import Verdict from './Verdict.jsx'
@@ -261,7 +261,12 @@ function What({
   const dark = lit === 0
   const req = requestsByFile.get(b.fi)
   const open = req && req.status !== 'done'
-  const colour = lit ? slotColor(coverage.slot[b.fi]) : null
+  // WHEN it was last touched, and WHO touched it — two facts, two channels,
+  // exactly as the plate draws them.
+  const stateNow = Date.now()
+  const state = lit ? stateOf(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : 'dark'
+  const colour = lit ? stateColour(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : null
+  const edge = lit ? slotColor(coverage.slot[b.fi]) : null
 
   return (
     <>
@@ -276,10 +281,16 @@ function What({
       </p>
 
       {!dark && (
-        <p style={{ fontSize: 12.5 }}>
-          {colour
-            ? 'The colour says an agent is connected right now and this is where it has been.'
-            : 'No live session, so this reads as ink: explored, but nobody is standing here.'}
+        <p style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span
+            style={{
+              display: 'inline-block', width: 11, height: 11, flex: '0 0 auto',
+              background: colour || 'var(--paper-2)',
+              border: `2px solid ${edge || 'var(--ink)'}`,
+            }}
+          />
+          {STATE_LABEL[state].replace(/^./, (c) => c.toUpperCase())}
+          {state === 'live' ? ' — the fill is green while somebody is standing here, and cools to red over five minutes.' : '.'}
         </p>
       )}
 
