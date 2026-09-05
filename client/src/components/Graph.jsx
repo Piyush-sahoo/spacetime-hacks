@@ -787,7 +787,8 @@ function drawGraph(ctx, s) {
 
     const hs = paint.hop[e.s]
     const ht = paint.hop[e.t]
-    const onWalk = hs >= 0 && ht >= 0 && Math.abs(hs - ht) === 1
+    const reached = hs >= 0 && ht >= 0 && Math.abs(hs - ht) === 1
+    const onWalk = reached && walkLive
     const touched = hiSet.size > 0 && (e.s === hi || e.t === hi)
     const lit = paint.lit[e.s] > 0 && paint.lit[e.t] > 0
 
@@ -802,6 +803,11 @@ function drawGraph(ctx, s) {
     } else if (touched) {
       stroke = 'rgba(255,140,70,0.85)'
       width = px(1.8)
+    } else if (reached && hi < 0) {
+      // The walk is over. Its path stays legible, quietly, so it stops
+      // competing with the colour that says who explored what.
+      stroke = 'rgba(53,208,255,0.17)'
+      width = px(1.15)
     } else if (hi >= 0) {
       stroke = 'rgba(250,249,246,0.06)'
     } else if (lit) {
@@ -890,13 +896,17 @@ function drawGraph(ctx, s) {
       animated = true
     }
 
+    // While the walk runs the hop tint OWNS the circle. Once it is exhausted
+    // the circle goes back to its coverage colour and keeps a cyan ring, so
+    // the reached set is still readable without repainting the whole graph.
+    const onWalk = hop >= 0 && walkLive
     let rgb = litRGB(i)
-    if (hop >= 0) rgb = hopTint(hop, maxHop)
+    if (onWalk) rgb = hopTint(hop, maxHop)
     const [r, g, b] = rgb
     const rad = R * (isHi ? 1.22 : 1)
 
     // glow under an explored circle
-    if (lit || hop >= 0) {
+    if (lit || onWalk) {
       const glow = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, rad * (3.2 + flare * 2.6))
       glow.addColorStop(0, rgba(r, g, b, 0.34 + flare * 0.4))
       glow.addColorStop(1, rgba(r, g, b, 0))
@@ -908,10 +918,10 @@ function drawGraph(ctx, s) {
 
     ctx.beginPath()
     ctx.arc(nd.x, nd.y, rad, 0, TAU)
-    if (lit || hop >= 0) {
+    if (lit || onWalk) {
       // Partial coverage of a group reads as a dimmer fill, so a directory that
       // is a quarter explored does not claim to be finished.
-      const a = hop >= 0 ? 0.95 : 0.36 + 0.6 * frac
+      const a = onWalk ? 0.95 : 0.36 + 0.6 * frac
       ctx.fillStyle = rgba(r, g, b, dim ? a * 0.32 : a)
       ctx.fill()
       ctx.lineWidth = px(1.4)
@@ -935,6 +945,15 @@ function drawGraph(ctx, s) {
       ctx.arc(nd.x, nd.y, rad + 3, 0, TAU)
       ctx.lineWidth = px(0.9)
       ctx.strokeStyle = lit ? rgba(r, g, b, dim ? 0.14 : 0.42) : 'rgba(250,249,246,0.14)'
+      ctx.stroke()
+    }
+
+    // where an exhausted walk reached
+    if (hop >= 0 && !walkLive) {
+      ctx.beginPath()
+      ctx.arc(nd.x, nd.y, rad + 4, 0, TAU)
+      ctx.lineWidth = px(1.1)
+      ctx.strokeStyle = dim ? 'rgba(53,208,255,0.12)' : 'rgba(53,208,255,0.36)'
       ctx.stroke()
     }
 
@@ -978,7 +997,7 @@ function drawGraph(ctx, s) {
     ctx.fillStyle = dim
       ? 'rgba(250,249,246,0.16)'
       : isHi ? '#ffffff'
-        : lit || hop >= 0 ? 'rgba(250,249,246,0.90)' : 'rgba(250,249,246,0.46)'
+        : lit || onWalk ? 'rgba(250,249,246,0.90)' : 'rgba(250,249,246,0.46)'
     ctx.fillText(label, nd.x, ly)
     if (showSub && it.sub && !dim) {
       ctx.font = subFont
