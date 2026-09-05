@@ -569,3 +569,13 @@ pre {
 .q.blast.out li::before { content: '→'; }
 .q.blast.in li::before { content: '←'; }
 .q.blast.near li::before { content: '·'; }
+
+/* ASKED — a heading and an answer, nothing between them. The path takes the
+   room and the status trails it, so the eye reads the file first. */
+#body .q .qh { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+#body .q .qh .qp { font-size: 12.5px; min-width: 0; word-break: break-word; }
+#body .q .qh .qs {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}

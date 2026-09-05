@@ -616,29 +616,32 @@ function Asked({ requests, territory }) {
           const cls = r.status === 'done' ? 'res' : r.status === 'claimed' ? 'to' : ''
           return (
             <li key={key(r.id)} className={cls}>
-              <span style={{ fontSize: 12.5 }}>{f ? f.path : `node ${key(r.nodeId)}`}</span>
               {/*
-                `r.note` was the path again, so every row printed its own title
-                twice — and the stored copy was written by the old path guesser,
-                so a .jsx file read back as .py forever. What is worth a line
-                here is what the region DOES, which is the thing somebody is
-                deciding whether to send an agent to.
+                TWO LINES. A HEADING AND AN ANSWER.
+
+                The row used to be four: the path, the file's own summary, a
+                status line, and then the finding — which put two competing
+                descriptions of the same file above the thing somebody actually
+                came to read. Status and age belong ON the heading, because they
+                qualify it rather than standing on their own.
+
+                Below it is exactly one explanation. Once an agent has been,
+                that is its finding. Until then it is what the file is for,
+                which is what somebody weighs when deciding whether to send one.
               */}
-              {f && f.summary ? (
-                <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0' }}>
-                  {f.summary}
-                </div>
-              ) : null}
-              <div className="ans">
-                <div>
-                  <span className="eyebrow">{String(r.status).toUpperCase()}</span>
-                  {r.claimedBy && idHex(r.claimedBy) ? (
-                    <span style={{ fontSize: 11 }}> · {idHex(r.claimedBy).slice(0, 8)}</span>
-                  ) : null}
-                  <span style={{ fontSize: 11, color: 'var(--ink-2)' }}> · {ago(tsMs(r.at))}</span>
-                </div>
-                {r.result ? <Finding text={r.result} /> : null}
+              <div className="qh">
+                <span className="qp">{f ? f.path : `node ${key(r.nodeId)}`}</span>
+                <span className="qs">
+                  {String(r.status).toUpperCase()}
+                  {r.claimedBy && idHex(r.claimedBy) ? ` · ${idHex(r.claimedBy).slice(0, 8)}` : ''}
+                  {` · ${ago(tsMs(r.at))}`}
+                </span>
               </div>
+              {r.result
+                ? <Finding text={r.result} />
+                : (f && f.summary
+                    ? <p className="para" style={{ margin: '3px 0 0' }}>{f.summary}</p>
+                    : null)}
             </li>
           )
         })}
