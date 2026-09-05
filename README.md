@@ -50,9 +50,11 @@ Measurement corpus: SWE-bench Verified instances (public dataset).
 
 | Doc | What's in it |
 |---|---|
-| [`docs/PROBLEM.md`](docs/PROBLEM.md) | The measurement and the diagrams — the backwards walk, the per-repo spread, why a better extractor doesn't fix it |
-| [`docs/SOLUTION.md`](docs/SOLUTION.md) | Architecture, schema, the core loop, and why the module does the real work |
-| [`docs/PRD.md`](docs/PRD.md) | Scope, acceptance criteria, and the verified demo path |
+| [`docs/PROBLEM-STATEMENT.md`](docs/PROBLEM-STATEMENT.md) | The problem, the evidence, and the diagrams — the backwards walk, the per-repo spread, why a better extractor doesn't fix it |
+| [`docs/SOLUTION.md`](docs/SOLUTION.md) | What we built and why it takes this shape |
+| [`docs/SPACETIMEDB.md`](docs/SPACETIMEDB.md) | **Where and how SpacetimeDB is used** — and what we didn't have to build because of it |
+| [`docs/PRD-PRODUCT.md`](docs/PRD-PRODUCT.md) | Product PRD — plain language. Features, users, journeys |
+| [`docs/PRD-TECHNICAL.md`](docs/PRD-TECHNICAL.md) | Technical PRD — schema, reducers, the walk, constraints |
 | [`docs/PROCESS.md`](docs/PROCESS.md) | Decisions, and the things that broke |
 | [`CONTRACT.md`](CONTRACT.md) | The module schema contract |
 

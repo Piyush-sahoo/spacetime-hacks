@@ -25,16 +25,23 @@ export function RoomProvider({ children }) {
   const stage2Ref = useRef(null)
 
   // ── connect ───────────────────────────────────────────────────────────────
+  const connectingRef = useRef(null)
   const connect = useCallback(async () => {
     if (apiRef.current && meta.status === 'connected') return apiRef.current
+    // React StrictMode mounts effects twice in dev; without this guard that is
+    // two websockets, two participants and a double-speed walk driver.
+    if (connectingRef.current) return connectingRef.current
     try {
-      const api = await connectLive(store)
+      connectingRef.current = connectLive(store)
+      const api = await connectingRef.current
       apiRef.current = api
       // Stage 1: the small tables, so the landing page can show the room.
       api.subscribe(['SELECT * FROM repo', 'SELECT * FROM participant'], () => setSubReady(true))
       return api
     } catch {
       return null
+    } finally {
+      connectingRef.current = null
     }
   }, [store, meta.status])
 

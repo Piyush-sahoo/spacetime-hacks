@@ -1,9 +1,63 @@
-# The problem
+# Problem statement
 
-## In one sentence
+## Statement
 
-An AI coding agent decides what to read and what to skip using a **map of your
-code** — and that map is missing more than half the roads that matter.
+**An AI coding agent decides which tests to skip using a call graph that nobody has
+validated. The graph reaches the test guarding a given fix 41.9% of the time. When
+it misses, the agent skips the one test that would have caught the bug, and nothing
+in the system reports a failure — the selection was complete with respect to the
+graph, and the graph was wrong.**
+
+## Context
+
+Graph-based test selection is a good idea and it is spreading. Build a call graph,
+walk backwards from the change, run the tests the walk reaches, skip the rest. It is
+how Aider's repo map, RepoGraph and LocAgent reason about a repository, and it is
+increasingly how autonomous agents decide what to verify before claiming a fix.
+
+The appeal is obvious: test suites are expensive, most tests are irrelevant to most
+changes, and a graph can tell you which.
+
+## Who has the problem
+
+Any team that lets an AI agent choose what to verify. The failure is silent by
+construction, so the people affected do not know they have it — which is why the
+problem persists.
+
+## Why it is invisible from inside the tool
+
+A backwards walk that exhausts its frontier before the hop bound is
+**graph-complete**: no test reachable *in this graph* was cut off. That is a real
+property, and a tool can check it and report success.
+
+It is also silent about the edges the graph never had. **An extractor cannot
+fail-closed on an edge it does not know exists.** Graph-completeness cannot detect
+a missing edge. Only a recall measurement against known labels can.
+
+## Why it is not self-correcting
+
+- Measured across eight years of django history, the figure is flat. It is not
+  improving on its own.
+- Upgrading from name matching to full type resolution moves paired recall by
+  **+0.071**, and the discordant split is indistinguishable from chance
+  (McNemar p = 0.73). Better extraction buys precision, and precision is not what
+  makes a skip safe.
+- On matplotlib and pytest the type-resolved graph scores **zero**. Those guarding
+  tests are not far away; they are in a different component entirely.
+
+## Scope of the claim
+
+This measures whether a labelled test can reach the fix it guards, transitively,
+within a bounded number of hops — a property of a specific *pair*, not of a single
+edge. It is a harder relation than the edge-level recall reported by PyCG (~70% on
+Python) or Sui et al. (median 0.884 on Java). The numbers are not comparable, and no
+claim is made that this extractor is worse than theirs.
+
+## What is missing
+
+The measurement exists. What has never existed is any way to **watch the miss
+happen** — to see a walk crawl outward, exhaust, and stop short of the one test that
+mattered, with your team watching the same thing at the same moment.
 
 ---
 
