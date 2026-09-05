@@ -31,6 +31,26 @@ red for everyone, and the verdict lands: `RUN_FULL`.
 Live shared state is not decoration here. The walk is a thing several people watch
 happen to the same graph at the same time, and the fan-out is the product.
 
+```mermaid
+flowchart TD
+    T1["Tab 1<br/>clicks a file"] -->|"start_walk()"| R["step_walk<br/>REDUCER"]
+    R -->|"one hop per call,<br/>along predecessors"| F[("frontier<br/>table")]
+    R --> V[("verdict<br/>table")]
+    F -.->|"subscription push"| T1
+    F -.->|"subscription push"| T2["Tab 2<br/>clicked nothing"]
+    F -.->|"subscription push"| T3["Phone<br/>clicked nothing"]
+    V -.->|"subscription push"| T2
+
+    style R fill:#1e3a5f,color:#fff
+    style F fill:#1e3a5f,color:#fff
+    style V fill:#1e3a5f,color:#fff
+    style T2 fill:#166534,color:#fff
+    style T3 fill:#166534,color:#fff
+```
+
+**Tab 2 called nothing and sees the identical animation.** Verified in two real
+browser tabs — same paint, same verdict, no refresh, no console errors.
+
 ## Honesty about the number
 
 Recall is **not** computable on an unlabelled repository — it needs a known guarding
@@ -75,10 +95,22 @@ cd client && npm install && npm run dev
 
 Module live on Maincloud as `map-room`. Loader verified end to end.
 
-The demo walk is measured, not asserted: from a labelled fix site in
-`django__django-11292`, six hops allowed, the frontier paints **1 → 58 → 389 → 57 →
-11** and then exhausts. `graph_complete = true` — the walk did not run out of hops,
-it ran out of graph. It still never reached
-`DateTimeFieldTest#test_datetimefield_1()`, the test that guards that fix.
+The demo walk is measured, not asserted. From a labelled fix site in
+`django__django-11292`, six hops allowed:
 
-`RUN_FULL`, at a Wilson lower bound of 0.3585 against a 0.95 bar.
+```
+hop 0  █                                                     1 node
+hop 1  ███████                                              58 nodes
+hop 2  ████████████████████████████████████████████████    389 nodes
+hop 3  ███████                                              57 nodes
+hop 4  █▌                                                   11 nodes
+       ──────────────────────────────────────────────────
+       frontier exhausted · 416 nodes reached
+
+       graph_complete = true      ← ran out of GRAPH, not out of hops
+       verdict        = RUN_FULL
+       wilson_lb      = 0.3585     threshold 0.95
+       missed         = DateTimeFieldTest#test_datetimefield_1()
+```
+
+The walk finished cleanly and still never reached the test that guards that fix.

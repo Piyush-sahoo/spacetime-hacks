@@ -43,6 +43,24 @@ percent**.
 
 That number has been in a table in a report. Nobody has ever *watched it happen*.
 
+```mermaid
+flowchart LR
+    A["You change<br/>one function"] --> B["The agent builds<br/>a map of your code"]
+    B --> C["It follows the map<br/>outward from the change"]
+    C --> D["Tests it found"]
+    C --> E["Tests it never found"]
+    D --> F["✓ these get run"]
+    E --> G["✗ these get skipped"]
+    G --> H["the bug ships,<br/>silently"]
+
+    style E fill:#7f1d1d,color:#fff
+    style G fill:#7f1d1d,color:#fff
+    style H fill:#450a0a,color:#fff
+    style F fill:#166534,color:#fff
+```
+
+Nothing warns you about the red path. From inside the tool, the search *succeeded*.
+
 ---
 
 ## What the product does
@@ -62,9 +80,54 @@ no path to it.
 
 Everyone in the room sees that at the same moment.
 
+### What that actually looks like
+
+Each bar is one step outward from the change. This is a real search on a real bug:
+
+```
+step 1  █                                                    1 place
+step 2  ████████████████                                    58 places
+step 3  ████████████████████████████████████████████████   389 places
+step 4  ███████████████                                     57 places
+step 5  ███                                                 11 places
+        ─────────────────────────────────────────────────
+        nothing left to search · 416 places visited
+
+        the test that catches this bug:  ✗ never reached
+```
+
+It spreads, peaks, narrows, and stops — and it stopped because **it ran out of
+map**, not because it ran out of patience. The search was complete. The map was
+wrong.
+
 ---
 
 ## Features
+
+```mermaid
+mindmap
+  root((The Map Room))
+    Get in
+      Join by link
+      No password
+      Name optional
+    Be together
+      See who is here
+      Live presence
+      Everyone sees one screen
+    Watch
+      Pick a change
+      It spreads step by step
+      Paints for everyone at once
+    Learn
+      Where it stopped
+      Out of map or out of budget
+      The test it missed
+    Trust
+      A plain verdict
+      The number behind it
+      Says so when it cannot know
+```
 
 | | Feature | What the user gets |
 |---|---|---|
@@ -81,6 +144,22 @@ Everyone in the room sees that at the same moment.
 ---
 
 ## What a person does, start to finish
+
+```mermaid
+journey
+    title The stranger's first 60 seconds
+    section Arrive
+      Opens the link: 5: Stranger
+      Reads one sentence: 4: Stranger
+    section Enter
+      Clicks "Watch a live room": 5: Stranger
+      Is inside, no signup: 5: Stranger
+    section Understand
+      Sees others already there: 4: Stranger
+      Clicks a change: 5: Stranger
+      Watches it spread and stop: 5: Stranger
+      Sees the missed test: 5: Stranger
+```
 
 ### The judge / the curious stranger — under 60 seconds
 
