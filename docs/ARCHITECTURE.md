@@ -81,6 +81,19 @@ No clone. No tarball. No parser. One HTTP request from inside the database, and 
 repository of any language is on the map in seconds. `truncated: true` on very large
 repos is recorded on the repo row and surfaced, never silently ignored.
 
+**Measured, live:**
+
+| repo | blobs | source files | wall time |
+|---|---:|---:|---:|
+| `django/django` | 7,087 | 2,975 | 3.6 s |
+| `honojs/hono` | 486 | 356 | 3.2 s |
+| `pallets/flask` | 236 | 83 | 3.3 s |
+| `Piyush-sahoo/spacetime-hacks` | 214 | 70 | 3.5 s |
+
+Time is dominated by the GitHub round trip, not repo size — 46 blobs and 7,087 blobs
+both land around 3.3 s. It works **unauthenticated**, so an anonymous visitor can paste
+a URL and get a map.
+
 ### 2. Light — the agent's attention becomes visible
 
 ```
@@ -207,5 +220,57 @@ src/lib/auth.ts   →  strip extension  →  src/lib/auth
 
 If the indexer and the resolver disagree by so much as a leading `./`, **every touch
 resolves to `node_id = 0`, the map stays dark, and every component reports success.**
-Unresolved touches are therefore still written with `node_id = 0` so the miss is
-countable and visible rather than silent.
+
+**Solved by construction:** `index_repo` does not reimplement the rule — it calls the
+same `dottedPath()` function the resolver uses. There is one implementation, so the two
+sides cannot drift. Verified end to end against freshly indexed repos: real paths resolve
+to real node ids, and a deliberate miss still writes `node_id = 0` so it stays countable.
+
+## Repo binding — how a checkout finds its map
+
+The plugin resolves which map to report to, in this order:
+
+1. `MAP_ROOM_REPO_ID` env var or `repo_id` in `.map-room.json` — the escape hatch.
+2. `git remote get-url origin` → `owner/repo` → look up the repo with that slug. This is
+   exactly the slug `index_repo` writes, so the two sides match with **zero configuration**.
+3. Otherwise: **report nothing and stay silent.** There is no fallback default — a
+   default would mean every unconfigured install polluting someone else's map.
+
+Cached per checkout, invalidated when `.git/config` changes, and resolved off the hot
+path so a tool call is never blocked.
+
+## What the hook can and cannot see
+
+The `PostToolUse` hook matches `Read | Edit | Write | Grep | Glob | Bash`.
+
+`Bash` matters more than it looks: an agent that explores with `cat`, `grep` and `sed`
+is invisible without it. Measured before the fix — a session whose subagents read
+hundreds of files recorded **8 touches**.
+
+Bash paths are extracted conservatively: the token must survive quote-aware parsing,
+carry a tracked extension (or be a known extensionless read like `cat Makefile`), and
+**exist on disk**. Globs, URLs, git refs (`HEAD:file.py`) and `echo`-style mentions are
+dropped. Under-reporting is preferred to inventing a path, because a wrong touch lights
+the wrong region of someone's map.
+
+## Who touched it — main agent vs subagents
+
+Subagent tool calls fire the hook with the **parent's `session_id`**, plus `agent_id` and
+`agent_type` which are absent for the main agent. That absence is the discriminator.
+
+The actor is encoded into the existing string columns as `session/actor` rather than
+added as a new column — adding a column to a populated table forces a destructive
+republish, and the loaded graphs are not expendable. A row with no `/` is the main agent,
+which is every row written before the feature existed, so it is backwards compatible by
+construction.
+
+## New territory
+
+A file on a feature branch that is not in the indexed tree cannot resolve. Rather than
+vanishing, it is minted as a node and drawn as **new ground** in a distinct style —
+covering new files, PR additions and index misses with one mechanism.
+
+New land is allotted from the top of the repo's id band counting down, while `index_repo`
+allots from the bottom counting up, a billion ids apart against fuses of 4,000 and 512 —
+so they cannot collide. Geography does not reflow when it appears: measured at
+**0.000000px** movement of existing nodes.
