@@ -151,6 +151,14 @@ export const Touch = __t.object("Touch", {
 });
 export type Touch = __Infer<typeof Touch>;
 
+export const TouchMeta = __t.object("TouchMeta", {
+  touchId: __t.u64(),
+  repoId: __t.u64(),
+  durationMs: __t.u32(),
+  toolUseId: __t.string(),
+});
+export type TouchMeta = __Infer<typeof TouchMeta>;
+
 export const Verdict = __t.object("Verdict", {
   id: __t.u64(),
   walkId: __t.u64(),

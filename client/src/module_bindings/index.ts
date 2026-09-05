@@ -38,11 +38,13 @@ import AgentHeartbeatReducer from "./agent_heartbeat_reducer";
 import ClaimRequestReducer from "./claim_request_reducer";
 import CompleteRequestReducer from "./complete_request_reducer";
 import CreateRepoReducer from "./create_repo_reducer";
+import EndSessionReducer from "./end_session_reducer";
 import FinishRepoReducer from "./finish_repo_reducer";
 import IngestEdgesReducer from "./ingest_edges_reducer";
 import IngestNodesReducer from "./ingest_nodes_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import ReportTouchReducer from "./report_touch_reducer";
+import ReportTouchTimedReducer from "./report_touch_timed_reducer";
 import RequestExplorationReducer from "./request_exploration_reducer";
 import ResetCoverageReducer from "./reset_coverage_reducer";
 import SetFocusReducer from "./set_focus_reducer";
@@ -66,6 +68,7 @@ import ParticipantRow from "./participant_table";
 import RepoRow from "./repo_table";
 import RepoIndexRow from "./repo_index_table";
 import TouchRow from "./touch_table";
+import TouchMetaRow from "./touch_meta_table";
 import VerdictRow from "./verdict_table";
 import WalkRow from "./walk_table";
 
@@ -250,6 +253,20 @@ const tablesSchema = __schema({
       { name: 'touch_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TouchRow),
+  touchMeta: __table({
+    name: 'touch_meta',
+    indexes: [
+      { accessor: 'repo_id', name: 'touch_meta_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+      { accessor: 'touch_id', name: 'touch_meta_touch_id_idx_btree', algorithm: 'btree', columns: [
+        'touchId',
+      ] },
+    ],
+    constraints: [
+      { name: 'touch_meta_touch_id_key', constraint: 'unique', columns: ['touchId'] },
+    ],
+  }, TouchMetaRow),
   verdict: __table({
     name: 'verdict',
     indexes: [
@@ -286,11 +303,13 @@ const reducersSchema = __reducers(
   __reducerSchema("claim_request", ClaimRequestReducer),
   __reducerSchema("complete_request", CompleteRequestReducer),
   __reducerSchema("create_repo", CreateRepoReducer),
+  __reducerSchema("end_session", EndSessionReducer),
   __reducerSchema("finish_repo", FinishRepoReducer),
   __reducerSchema("ingest_edges", IngestEdgesReducer),
   __reducerSchema("ingest_nodes", IngestNodesReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("report_touch", ReportTouchReducer),
+  __reducerSchema("report_touch_timed", ReportTouchTimedReducer),
   __reducerSchema("request_exploration", RequestExplorationReducer),
   __reducerSchema("reset_coverage", ResetCoverageReducer),
   __reducerSchema("set_focus", SetFocusReducer),
@@ -318,6 +337,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "node_summary": Omit<typeof tablesSchema.schemaType.tables["nodeSummary"], "accessorName"> & { readonly accessorName: "node_summary" };
     /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
     readonly "repo_index": Omit<typeof tablesSchema.schemaType.tables["repoIndex"], "accessorName"> & { readonly accessorName: "repo_index" };
+    /** @deprecated Use `touchMeta` instead. This alias will be removed in the next major version. */
+    readonly "touch_meta": Omit<typeof tablesSchema.schemaType.tables["touchMeta"], "accessorName"> & { readonly accessorName: "touch_meta" };
   };
 };
 
@@ -342,6 +363,7 @@ const tableAccessorAliases = {
   "node_cov": "nodeCov",
   "node_summary": "nodeSummary",
   "repo_index": "repoIndex",
+  "touch_meta": "touchMeta",
 } as const;
 
 function __withTableAccessorAliases<T extends object>(target: T, freeze = false): T {
@@ -374,6 +396,8 @@ export type DbView = __DbViewBase & {
   readonly "node_summary": __DbViewBase["nodeSummary"];
   /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
   readonly "repo_index": __DbViewBase["repoIndex"];
+  /** @deprecated Use `touchMeta` instead. This alias will be removed in the next major version. */
+  readonly "touch_meta": __DbViewBase["touchMeta"];
 };
 
 type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
@@ -390,6 +414,8 @@ export type Tables = __TablesBase & {
   readonly "node_summary": __TablesBase["nodeSummary"];
   /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
   readonly "repo_index": __TablesBase["repoIndex"];
+  /** @deprecated Use `touchMeta` instead. This alias will be removed in the next major version. */
+  readonly "touch_meta": __TablesBase["touchMeta"];
 };
 
 /** The tables available in this remote SpacetimeDB module. Each table reference doubles as a query builder. */

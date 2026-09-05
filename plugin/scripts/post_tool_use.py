@@ -3,7 +3,8 @@
 
 Matched against Read|Edit|Write|Grep|Glob|Bash. Reads the hook payload on
 stdin, pulls file paths out of it (for Bash, out of the command string), makes
-them repo-relative and POSTs them to the `report_touch` reducer.
+them repo-relative and POSTs them to the `report_touch_timed` reducer, along
+with how long the tool call took.
 
 Contract, absolutely non-negotiable: this must never block the agent's turn and
 must never fail it. The network call happens in a detached child process; the
@@ -34,6 +35,23 @@ def log(msg: str) -> None:
         print(msg, file=sys.stderr)
 
 
+def _first_int(d, keys) -> int:
+    """First key in `keys` that holds a non-negative int-ish value, else 0."""
+    if not isinstance(d, dict):
+        return 0
+    for k in keys:
+        v = d.get(k)
+        if v is None or isinstance(v, bool):
+            continue
+        try:
+            n = int(v)
+        except Exception:
+            continue
+        if n >= 0:
+            return n
+    return 0
+
+
 def main() -> int:
     try:
         raw = sys.stdin.read()
@@ -62,6 +80,22 @@ def main() -> int:
     )
     session = payload.get("session_id") or payload.get("sessionId") or "unknown-session"
     cwd = payload.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR")
+
+    # How long the tool call itself took, and which call it was. Both are in the
+    # payload and both used to be thrown away. They ride to a NEW reducer into a
+    # NEW side table: `touch` is populated and its shape is frozen, so adding a
+    # column to it would force a destructive republish of ten loaded graphs.
+    # Every plausible spelling is read, and a payload that carries none of them
+    # simply reports as before -- 0 means "not known", never "instant".
+    duration_ms = _first_int(payload, ("duration_ms", "durationMs", "duration"))
+    if duration_ms == 0 and isinstance(tool_response, dict):
+        duration_ms = _first_int(tool_response, ("duration_ms", "durationMs", "duration"))
+    tool_use_id = str(
+        payload.get("tool_use_id")
+        or payload.get("toolUseId")
+        or payload.get("tool_use_ID")
+        or ""
+    )[:64]
 
     if not tool_name:
         return 0
@@ -110,11 +144,15 @@ def main() -> int:
         _hint(map_room, cfg, session)
         return 0
 
+    log("duration_ms=%s tool_use_id=%s" % (duration_ms, tool_use_id))
+
     if DEBUG:
-        print(map_room.report_touch(cfg, token, session, tool_name, paths))
+        print(map_room.report_touch_timed(
+            cfg, token, session, tool_name, paths, duration_ms, tool_use_id))
         return 0
 
-    _fire_and_forget(map_room, cfg, token, session, tool_name, paths)
+    _fire_and_forget(
+        map_room, cfg, token, session, tool_name, paths, duration_ms, tool_use_id)
     return 0
 
 
@@ -130,14 +168,16 @@ def _hint(map_room, cfg, session) -> None:
         print(json.dumps({"systemMessage": text, "suppressOutput": True}))
 
 
-def _fire_and_forget(map_room, cfg, token, session, tool_name, paths) -> None:
+def _fire_and_forget(map_room, cfg, token, session, tool_name, paths,
+                    duration_ms=0, tool_use_id="") -> None:
     """Detach so the agent's turn is never waiting on the network."""
     try:
         pid = os.fork()
     except Exception:
         # No fork on this platform: fall back to a bounded blocking call.
         try:
-            map_room.report_touch(cfg, token, session, tool_name, paths)
+            map_room.report_touch_timed(
+                cfg, token, session, tool_name, paths, duration_ms, tool_use_id)
         except Exception:
             pass
         return
@@ -158,20 +198,24 @@ def _fire_and_forget(map_room, cfg, token, session, tool_name, paths) -> None:
     except Exception:
         pass
     try:
-        _resolve_and_report(map_room, cfg, token, session, tool_name, paths)
+        _resolve_and_report(
+            map_room, cfg, token, session, tool_name, paths,
+            duration_ms, tool_use_id)
     except Exception:
         pass
     os._exit(0)
 
 
-def _resolve_and_report(map_room, cfg, token, session, tool_name, paths) -> None:
+def _resolve_and_report(map_room, cfg, token, session, tool_name, paths,
+                        duration_ms=0, tool_use_id="") -> None:
     """Runs detached. Free to hit git and the network; nothing waits on it."""
     if not cfg.get("repo_id"):
         map_room.bind_repo(cfg, token, allow_network=True)
     if not cfg.get("repo_id"):
         _autoindex(map_room, cfg, token)
     if cfg.get("repo_id"):
-        map_room.report_touch(cfg, token, session, tool_name, paths)
+        map_room.report_touch_timed(
+            cfg, token, session, tool_name, paths, duration_ms, tool_use_id)
 
 
 def _autoindex(map_room, cfg, token) -> None:

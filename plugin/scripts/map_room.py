@@ -18,10 +18,14 @@ import ssl
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_HOST = "https://maincloud.spacetimedb.com"
 DEFAULT_DB = "map-room"
+# Where the map is watched. Overridable so a fork or a local `vite dev` prints
+# its own links instead of the hosted ones.
+DEFAULT_SITE = "https://map-room-piyushs-projects-4db92eb5.vercel.app"
 # There is deliberately NO default repo id. An unbound checkout reports nothing
 # rather than dumping its file reads onto somebody else's map.
 DEFAULT_REPO_ID = None
@@ -490,6 +494,34 @@ def report_touch(cfg: dict, token: str | None, session: str, tool: str, paths: l
     ])
 
 
+def report_touch_timed(cfg: dict, token: str | None, session: str, tool: str,
+                       paths: list, duration_ms=0, tool_use_id: str = ""):
+    """`report_touch` plus how long the tool call took.
+
+    Falls back to the plain 5-arg reducer when there is nothing extra to say, so
+    a payload with no duration in it costs exactly what it always did. The extra
+    fields land in the additive `touch_meta` table -- `touch` itself is
+    populated and its shape is frozen.
+    """
+    try:
+        ms = int(duration_ms or 0)
+    except Exception:
+        ms = 0
+    if ms < 0:
+        ms = 0
+    ms = min(ms, 4294967295)
+    tuid = str(tool_use_id or "")[:64]
+    if ms == 0 and not tuid:
+        return report_touch(cfg, token, session, tool, paths)
+    if not cfg.get("repo_id"):
+        return None
+    args = [
+        _u64(cfg["repo_id"]), str(session), str(cfg["agent_name"]), str(tool),
+        json.dumps([str(p) for p in paths]), ms, tuid,
+    ]
+    return call_reducer(cfg, token, "report_touch_timed", args)
+
+
 def sql(cfg: dict, token: str | None, query: str, timeout: float = SQL_TIMEOUT):
     """POST a raw SQL string to /v1/database/<db>/sql. Returns list[dict] or None.
 
@@ -907,3 +939,70 @@ def claim_request(cfg: dict, token: str | None, request_id, agent_name: str | No
 def complete_request(cfg: dict, token: str | None, request_id, result: str):
     args = [_u64(request_id), str(result)]
     return call_reducer(cfg, token, "complete_request", args)
+
+
+# --------------------------------------------------------------------------
+# session lifecycle -- so the lamps can go out
+# --------------------------------------------------------------------------
+
+def end_session(cfg: dict, token: str | None, session: str):
+    """Mark a session (and every subagent under it) offline.
+
+    Nothing else ever writes `online: false` on an agent row: a hook is an HTTP
+    caller with no connection for the database to notice dropping. Without this
+    call an agent stays lit forever and the map paints actor colour for somebody
+    who went home. Idempotent and safe for a session the map never saw.
+    """
+    key = str(session or "").strip()
+    if not key:
+        return None
+    return call_reducer(cfg, token, "end_session", [key])
+
+
+# --------------------------------------------------------------------------
+# the two links
+# --------------------------------------------------------------------------
+
+def site(cfg: dict | None = None) -> str:
+    base = (
+        os.environ.get("MAP_ROOM_SITE")
+        or (cfg or {}).get("site")
+        or DEFAULT_SITE
+    )
+    return str(base).rstrip("/")
+
+
+def repo_ref(cfg: dict) -> str | None:
+    """What to put after `?repo=`.
+
+    The slug when we resolved one from the git remote, and the numeric repo id
+    otherwise -- the page accepts either, so a repo pinned by `.map-room.json`
+    with no remote still gets a working link instead of no link.
+    """
+    slug = (cfg.get("repo_slug") or "").strip()
+    if slug:
+        return slug
+    rid = cfg.get("repo_id")
+    return str(rid) if rid else None
+
+
+def base_link(cfg: dict) -> str | None:
+    """Everything every agent has ever explored in this repo."""
+    ref = repo_ref(cfg)
+    if not ref:
+        return None
+    return "%s/?repo=%s" % (site(cfg), urllib.parse.quote(ref, safe="/"))
+
+
+def session_link(cfg: dict, session: str) -> str | None:
+    """This one session's route, and nothing else.
+
+    `session` is Claude Code's own `session_id`, which is already written into
+    every `touch` row and into `agent_session.session`, so the link needs no new
+    data at all -- it is derivable the moment the session has an id.
+    """
+    base = base_link(cfg)
+    key = str(session or "").strip()
+    if not base or not key or key == "unknown-session":
+        return None
+    return "%s&session=%s" % (base, urllib.parse.quote(key, safe=""))

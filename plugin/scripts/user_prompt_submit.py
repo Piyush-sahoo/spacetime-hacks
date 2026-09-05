@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook — inject the human's pending exploration requests.
+"""UserPromptSubmit hook — the session link, and the human's exploration requests.
 
-Queries `exploration_request` for rows still in status "pending" and, only if
-there are any, injects them into the agent's context via
-`hookSpecificOutput.additionalContext`.
+Three jobs, in one pass, because this is the only hook that already runs
+synchronously on every prompt:
 
-Also sends a fire-and-forget `agent_heartbeat` so the agent shows up live in
-The Map Room's presence rail.
+1. On the FIRST prompt of a session, print the link that shows this session and
+   nothing else, so it lands in the terminal where the person can click it. The
+   URL needs no new data: `session_id` is already written into every `touch` row
+   and into `agent_session.session`, so `?repo=<slug>&session=<id>` is
+   derivable the moment the session has an id.
+2. Send a fire-and-forget `agent_heartbeat` so the agent shows up live in the
+   presence rail.
+3. Inject the human's still-pending exploration requests into the agent's
+   context via `hookSpecificOutput.additionalContext`.
 
-Silence is the correct output when nothing is pending. Failure is silent too:
-this hook must never block or reject the user's prompt.
+Everything is conditional on the repo being BOUND. There is deliberately no
+default repo id, so an unbound checkout prints nothing, links to nothing and
+reports nothing -- it is not on anybody's map and must not be told it is.
+
+At most one JSON object may be printed, so the three jobs share one payload.
+Silence is the correct output when there is nothing to say. Failure is silent
+too: this hook must never block or reject the user's prompt.
 """
 
 from __future__ import annotations
@@ -49,22 +60,57 @@ def main() -> int:
 
     _heartbeat(map_room, cfg, token, session)
 
+    out: dict = {}
+    context: list = []
+
+    # ---- 1. the session link, once ----------------------------------------
+    link = _session_link_once(map_room, cfg, session)
+    if link:
+        out["systemMessage"] = "[The Map Room] this session: %s" % link
+        # `systemMessage` is what puts the line in the terminal. The same link
+        # also goes to the model, in one line, so that when the person asks
+        # "where do I watch this?" the answer is already in context instead of
+        # being a guess.
+        context.append(
+            "[The Map Room] This session is being drawn live at %s -- that link "
+            "shows only this session's route. Drop the `&session=` part to see "
+            "everything every agent has ever explored in this repo. Give the "
+            "person the link if they ask where to watch." % link
+        )
+
+    # ---- 3. the human's pending requests ----------------------------------
     query = (
         "SELECT * FROM exploration_request "
         "WHERE status = 'pending' AND repo_id = %d" % cfg["repo_id"]
     )
     rows = map_room.sql(cfg, token, query)
-    if not rows:
-        return 0
+    if rows:
+        context.append(_render(rows[:MAX_REQUESTS], cfg))
 
-    context = _render(rows[:MAX_REQUESTS], cfg)
-    print(json.dumps({
-        "hookSpecificOutput": {
+    if context:
+        out["hookSpecificOutput"] = {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": context,
+            "additionalContext": "\n\n".join(context),
         }
-    }))
+
+    if out:
+        print(json.dumps(out))
     return 0
+
+
+def _session_link_once(map_room, cfg, session) -> str | None:
+    """The per-session link, at most once per session.
+
+    Same one-shot marker mechanism the un-indexed hint already uses, keyed on
+    the session id -- so this is one line on the first prompt, not a line on
+    every prompt.
+    """
+    link = map_room.session_link(cfg, session)
+    if not link:
+        return None
+    if not map_room.once("session-link", str(session)):
+        return None
+    return link
 
 
 def _hint(map_room, cfg, session) -> None:

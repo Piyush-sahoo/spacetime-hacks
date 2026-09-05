@@ -152,6 +152,27 @@ const touch = table(
   }
 );
 
+/**
+ * Per-tool-call detail that will not fit in `touch`.
+ *
+ * `touch` is populated and its shape is frozen — adding a column to it forces a
+ * destructive republish, and the loaded graphs are not expendable. So the extra
+ * per-call fields live in a SEPARATE table keyed on `touch.id`, which is an
+ * additive change and publishes with `--delete-data=never`.
+ *
+ * `duration_ms` is how long the tool call itself took, straight off the
+ * PostToolUse payload. 0 means the hook did not know.
+ */
+const touch_meta = table(
+  { name: 'touch_meta', public: true },
+  {
+    touch_id: t.u64().primaryKey(),
+    repo_id: t.u64().index('btree'),
+    duration_ms: t.u32(),
+    tool_use_id: t.string(),
+  }
+);
+
 /** An agent presence row, so agents show up in the room next to humans. */
 const agent_session = table(
   { name: 'agent_session', public: true },
@@ -288,6 +309,7 @@ const spacetimedb = schema({
   verdict,
   node_cov,
   touch,
+  touch_meta,
   agent_session,
   exploration_request,
   path_cache,
@@ -980,16 +1002,16 @@ function bumpSession(
  * A path that resolves to nothing still gets its `touch` row with node_id = 0,
  * so misses stay countable.
  */
-export const report_touch = spacetimedb.reducer(
-  { name: 'report_touch' },
-  {
-    repo_id: t.u64(),
-    session: t.string(),
-    agent_name: t.string(),
-    tool: t.string(),
-    paths_json: t.string(),
-  },
-  (ctx, { repo_id, session, agent_name, tool, paths_json }) => {
+function applyTouch(
+  ctx: Ctx,
+  repo_id: bigint,
+  session: string,
+  agent_name: string,
+  tool: string,
+  paths_json: string,
+  duration_ms: number,
+  tool_use_id: string
+): void {
     // A malformed payload from a hook must never fail the agent's turn.
     let raw: unknown;
     try {
@@ -1030,7 +1052,7 @@ export const report_touch = spacetimedb.reducer(
         if (minted !== 0n) ids = [minted];
       }
 
-      ctx.db.touch.insert({
+      const row = ctx.db.touch.insert({
         id: 0n,
         repo_id,
         node_id: ids.length > 0 ? ids[0] : 0n,
@@ -1040,6 +1062,18 @@ export const report_touch = spacetimedb.reducer(
         agent_name,
         at: now,
       });
+
+      // Only file a meta row when there is something in it. An untimed report
+      // (an older plugin, or a payload with no duration) simply has no row,
+      // and the reader treats a missing row as "not known" rather than as 0.
+      if (row && (duration_ms > 0 || tool_use_id.length > 0)) {
+        ctx.db.touch_meta.insert({
+          touch_id: row.id,
+          repo_id,
+          duration_ms,
+          tool_use_id: tool_use_id.slice(0, 64),
+        });
+      }
 
       for (const nodeId of ids) {
         const existing = ctx.db.node_cov.node_id.find(nodeId);
@@ -1066,7 +1100,91 @@ export const report_touch = spacetimedb.reducer(
       }
     }
 
-    bumpSession(ctx, skey, agent_name, repo_id, paths.length);
+  bumpSession(ctx, skey, agent_name, repo_id, paths.length);
+}
+
+/**
+ * The coverage feed as it has always been. Signature byte-identical, so every
+ * plugin already installed out there keeps working untouched.
+ */
+export const report_touch = spacetimedb.reducer(
+  { name: 'report_touch' },
+  {
+    repo_id: t.u64(),
+    session: t.string(),
+    agent_name: t.string(),
+    tool: t.string(),
+    paths_json: t.string(),
+  },
+  (ctx, { repo_id, session, agent_name, tool, paths_json }) => {
+    applyTouch(ctx, repo_id, session, agent_name, tool, paths_json, 0, '');
+  }
+);
+
+/**
+ * The same feed, plus how long the tool call took.
+ *
+ * A NEW reducer rather than two more parameters on `report_touch`: the old
+ * signature is frozen for compatibility, and a reducer cannot hand a touch id
+ * back to the caller, so the only place that knows the id of the row it just
+ * inserted is inside the reducer itself. Hence the meta row is written here,
+ * in the same transaction as the touch it describes, and cannot orphan.
+ */
+export const report_touch_timed = spacetimedb.reducer(
+  { name: 'report_touch_timed' },
+  {
+    repo_id: t.u64(),
+    session: t.string(),
+    agent_name: t.string(),
+    tool: t.string(),
+    paths_json: t.string(),
+    duration_ms: t.u32(),
+    tool_use_id: t.string(),
+  },
+  (ctx, { repo_id, session, agent_name, tool, paths_json, duration_ms, tool_use_id }) => {
+    applyTouch(ctx, repo_id, session, agent_name, tool, paths_json, duration_ms, tool_use_id);
+  }
+);
+
+/**
+ * A session is over. Put its lamps out.
+ *
+ * Nothing else in this module ever writes `online: false` on an agent row --
+ * `bumpSession` only ever writes `true`, and `identity_disconnected` speaks
+ * only for `participant`, because a Claude Code hook is an HTTP caller with no
+ * persistent connection to lose. So without this reducer an agent stays lit
+ * forever and the map shows actor colour for nobody, which is exactly the bug
+ * this fixes.
+ *
+ * A subagent's row is keyed `<session>/<actor>` (see `presenceKey`), so ending
+ * the parent session must also end every child under it. Both spellings are
+ * accepted as the argument: passing `<session>/<actor>` ends just that
+ * subagent, passing `<session>` ends the whole tree.
+ *
+ * Idempotent, and a no-op for a session that was never seen. A hook that fires
+ * twice, or fires for a session on another repo, costs nothing.
+ */
+export const end_session = spacetimedb.reducer(
+  { name: 'end_session' },
+  { session: t.string() },
+  (ctx, { session }) => {
+    const key = session.trim();
+    if (key.length === 0) return;
+    const prefix = `${key}/`;
+
+    // The exact row, via the index.
+    for (const s of ctx.db.agent_session.session.filter(key)) {
+      if (s.online) ctx.db.agent_session.id.update({ ...s, online: false });
+    }
+
+    // Its subagents. `session` is indexed for equality, not for prefixes, so
+    // this is a scan -- bounded by the number of agent rows, which is small
+    // (one per session per actor) and never grows with repo size.
+    for (const s of ctx.db.agent_session.iter()) {
+      if (s.online && s.session.startsWith(prefix)) {
+        ctx.db.agent_session.id.update({ ...s, online: false });
+      }
+    }
   }
 );
 
