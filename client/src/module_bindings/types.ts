@@ -45,6 +45,18 @@ export const ExplorationRequest = __t.object("ExplorationRequest", {
 });
 export type ExplorationRequest = __Infer<typeof ExplorationRequest>;
 
+export const FileMeta = __t.object("FileMeta", {
+  nodeId: __t.u64(),
+  repoId: __t.u64(),
+  symbols: __t.u32(),
+  loc: __t.u32(),
+  summary: __t.string(),
+  role: __t.string(),
+  importance: __t.u8(),
+  at: __t.timestamp(),
+});
+export type FileMeta = __Infer<typeof FileMeta>;
+
 export const Frontier = __t.object("Frontier", {
   id: __t.u64(),
   walkId: __t.u64(),

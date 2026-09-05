@@ -52,6 +52,7 @@ import StartWalkReducer from "./start_walk_reducer";
 import StepWalkReducer from "./step_walk_reducer";
 
 // Import all procedure arg schemas
+import * as EnrichRepoProcedure from "./enrich_repo_procedure";
 import * as IndexRepoProcedure from "./index_repo_procedure";
 import * as SummarizeRegionProcedure from "./summarize_region_procedure";
 
@@ -59,6 +60,7 @@ import * as SummarizeRegionProcedure from "./summarize_region_procedure";
 import AgentSessionRow from "./agent_session_table";
 import EdgeRow from "./edge_table";
 import ExplorationRequestRow from "./exploration_request_table";
+import FileMetaRow from "./file_meta_table";
 import FrontierRow from "./frontier_table";
 import NewLandRow from "./new_land_table";
 import NodeRow from "./node_table";
@@ -127,6 +129,20 @@ const tablesSchema = __schema({
       { name: 'exploration_request_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ExplorationRequestRow),
+  fileMeta: __table({
+    name: 'file_meta',
+    indexes: [
+      { accessor: 'node_id', name: 'file_meta_node_id_idx_btree', algorithm: 'btree', columns: [
+        'nodeId',
+      ] },
+      { accessor: 'repo_id', name: 'file_meta_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'file_meta_node_id_key', constraint: 'unique', columns: ['nodeId'] },
+    ],
+  }, FileMetaRow),
   frontier: __table({
     name: 'frontier',
     indexes: [
@@ -319,6 +335,7 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("enrich_repo", EnrichRepoProcedure.params, EnrichRepoProcedure.returnType),
   __procedureSchema("index_repo", IndexRepoProcedure.params, IndexRepoProcedure.returnType),
   __procedureSchema("summarize_region", SummarizeRegionProcedure.params, SummarizeRegionProcedure.returnType),
 );
@@ -329,6 +346,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "agent_session": Omit<typeof tablesSchema.schemaType.tables["agentSession"], "accessorName"> & { readonly accessorName: "agent_session" };
     /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
     readonly "exploration_request": Omit<typeof tablesSchema.schemaType.tables["explorationRequest"], "accessorName"> & { readonly accessorName: "exploration_request" };
+    /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */
+    readonly "file_meta": Omit<typeof tablesSchema.schemaType.tables["fileMeta"], "accessorName"> & { readonly accessorName: "file_meta" };
     /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
     readonly "new_land": Omit<typeof tablesSchema.schemaType.tables["newLand"], "accessorName"> & { readonly accessorName: "new_land" };
     /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
@@ -359,6 +378,7 @@ const REMOTE_MODULE = {
 const tableAccessorAliases = {
   "agent_session": "agentSession",
   "exploration_request": "explorationRequest",
+  "file_meta": "fileMeta",
   "new_land": "newLand",
   "node_cov": "nodeCov",
   "node_summary": "nodeSummary",
@@ -388,6 +408,8 @@ export type DbView = __DbViewBase & {
   readonly "agent_session": __DbViewBase["agentSession"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __DbViewBase["explorationRequest"];
+  /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */
+  readonly "file_meta": __DbViewBase["fileMeta"];
   /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
   readonly "new_land": __DbViewBase["newLand"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
@@ -406,6 +428,8 @@ export type Tables = __TablesBase & {
   readonly "agent_session": __TablesBase["agentSession"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __TablesBase["explorationRequest"];
+  /** @deprecated Use `fileMeta` instead. This alias will be removed in the next major version. */
+  readonly "file_meta": __TablesBase["fileMeta"];
   /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
   readonly "new_land": __TablesBase["newLand"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */

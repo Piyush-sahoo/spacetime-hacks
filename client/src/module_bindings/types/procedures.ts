@@ -6,9 +6,12 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all procedure arg schemas
+import * as EnrichRepoProcedure from "../enrich_repo_procedure";
 import * as IndexRepoProcedure from "../index_repo_procedure";
 import * as SummarizeRegionProcedure from "../summarize_region_procedure";
 
+export type EnrichRepoArgs = __Infer<typeof EnrichRepoProcedure.params>;
+export type EnrichRepoResult = __Infer<typeof EnrichRepoProcedure.returnType>;
 export type IndexRepoArgs = __Infer<typeof IndexRepoProcedure.params>;
 export type IndexRepoResult = __Infer<typeof IndexRepoProcedure.returnType>;
 export type SummarizeRegionArgs = __Infer<typeof SummarizeRegionProcedure.params>;

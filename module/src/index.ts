@@ -299,6 +299,37 @@ const new_land_seq = table(
   }
 );
 
+/**
+ * What is actually INSIDE the file behind a node. Written by `enrich_repo`.
+ *
+ * A SIDE TABLE, not columns on `node`, for the same reason `touch_meta` and
+ * `node_summary` are side tables: `node` holds 16k+ rows across 13 loaded
+ * graphs, and adding a column to a populated table forces a destructive
+ * republish that would wipe every one of them. A new table is additive and
+ * publishes with `--delete-data=never`.
+ *
+ * `symbols` and `loc` are MEASURED -- a regex count of named callables and a
+ * line count, both reproducible from the file. They are what block height is
+ * computed from, so they have to be checkable rather than plausible.
+ *
+ * `summary`, `role` and `importance` are the model's, and stay `''` / `''` / 0
+ * when no model was asked or the model did not answer for that file. A blank
+ * summary is honest; a guessed one is not.
+ */
+const file_meta = table(
+  { name: 'file_meta', public: true },
+  {
+    node_id: t.u64().primaryKey(),
+    repo_id: t.u64().index('btree'),
+    symbols: t.u32(), // named callables / types found by regex
+    loc: t.u32(), // lines in the file as fetched
+    summary: t.string(), // one sentence, model-written; '' when unknown
+    role: t.string(), // entry|config|model|view|controller|test|util|generated|''
+    importance: t.u8(), // 1..5; 0 when unknown
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   repo,
   node,
@@ -317,6 +348,7 @@ const spacetimedb = schema({
   node_summary,
   new_land,
   new_land_seq,
+  file_meta,
 });
 export default spacetimedb;
 
@@ -769,7 +801,13 @@ function moduleToPath(qual: string): string {
   const symbol = qual.indexOf('::') >= 0 ? qual.slice(qual.indexOf('::') + 2) : '';
   for (const ext of SOURCE_EXTS) {
     if (symbol.endsWith(ext) && symbol.indexOf('/') === -1) {
-      segs.pop();
+      // A filename may itself contain dots (`postcss.config.js`), and the module
+      // path was built by `dottedPath`, which turned every one of them into a
+      // separator. So pop as many segments as the BASENAME contributed -- not
+      // one -- or `client/postcss.config.js` comes back as
+      // `client/postcss/postcss.config.js` and the fetch 404s.
+      const eaten = dottedPath(symbol).split('.').filter(x => x.length > 0).length;
+      for (let k = 0; k < eaten && segs.length > 0; k++) segs.pop();
       segs.push(symbol);
       return segs.join('/');
     }
@@ -1736,5 +1774,689 @@ export const summarizeRegion = spacetimedb.procedure(
     });
 
     return `ok ${name}: ${summary}`;
+  }
+);
+
+// ------------------------------------------------------- enrichment: the fix
+//
+// `index_repo` puts a repo on the map in 3.4 seconds by reading only its file
+// TREE. That is why it is instant, and it is also why the map it produces is
+// thin: one node per file, and the only edges are directory containment. Every
+// block stands at the same height because every file holds exactly one node,
+// and the impact walk traverses FOLDERS because folders are the only relation
+// there is.
+//
+// `enrich_repo` is the second, opt-in pass that reads the file CONTENTS. It is
+// deliberately separate from indexing: pasting a URL must stay instant, and
+// nobody who pastes django/django (2,975 files) should silently spend tokens.
+//
+// The division of labour is the whole point:
+//
+//   EDGES come from a REGEX and only from a regex. The model is never asked
+//   whether one file imports another. A hallucinated import would corrupt the
+//   exact relation this product measures, and "how do you know that edge is
+//   real" has to have an answer: it is a line in the file, and you can go read
+//   it. An import that resolves to nothing is DROPPED, counted and reported --
+//   never guessed into place.
+//
+//   PROSE comes from the model, because a sentence cannot corrupt a graph.
+
+/** The cheap, fast, non-reasoning tier -- lowest latency for a batched call.
+ *  Verified from https://developers.openai.com/api/docs/models/gpt-4.1-nano
+ *  ("fastest and most cost-efficient version of GPT-4.1 ... without a
+ *  reasoning step"), fetched via ctx7, not recalled. */
+const OPENAI_MODEL = 'gpt-4.1-nano';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+
+/** Files per call. The client drives batches and resumes on `offset`. */
+const MAX_ENRICH_LIMIT = 40;
+/** Enough of a file to find every import and count every symbol. */
+const ENRICH_FILE_CHARS = 80000;
+/** Per-file slice sent to the model. 40 x this is the whole prompt. */
+const LLM_FILE_CHARS = 3500;
+/** An import that lands on more files than this is ambiguous, not resolved. */
+const MAX_IMPORT_FANOUT = 8;
+/** Per-file cap on written IMPORTS edges, so one generated file cannot flood. */
+const MAX_IMPORTS_PER_FILE = 60;
+
+type Lang = 'py' | 'js' | 'rs' | 'go' | 'jvm' | 'c' | 'other';
+
+function langOf(path: string): Lang {
+  const p = path.toLowerCase();
+  if (p.endsWith('.py')) return 'py';
+  if (
+    p.endsWith('.ts') || p.endsWith('.tsx') || p.endsWith('.js') ||
+    p.endsWith('.jsx') || p.endsWith('.mjs') || p.endsWith('.cjs')
+  ) return 'js';
+  if (p.endsWith('.rs')) return 'rs';
+  if (p.endsWith('.go')) return 'go';
+  if (
+    p.endsWith('.java') || p.endsWith('.cs') || p.endsWith('.kt') ||
+    p.endsWith('.scala')
+  ) return 'jvm';
+  if (
+    p.endsWith('.c') || p.endsWith('.h') || p.endsWith('.cc') ||
+    p.endsWith('.cpp') || p.endsWith('.hpp')
+  ) return 'c';
+  return 'other';
+}
+
+/**
+ * The import statements in a file, as WRITTEN. No inference, no model.
+ *
+ * Returns the raw specifier text (`./store`, `django.forms.fields`,
+ * `crate::graph::walk`, `"utils.h"`), which `resolveImportSpec` then tries to
+ * turn into a file in THIS repo. Anything that is not one of these shapes is
+ * simply not an import as far as this module is concerned.
+ */
+function extractImports(text: string, lang: Lang): string[] {
+  const out: string[] = [];
+  const push = (v: string | undefined): void => {
+    if (typeof v !== 'string') return;
+    const s = v.trim();
+    if (s.length > 0 && s.length < 300) out.push(s);
+  };
+
+  if (lang === 'js') {
+    // `import x from '…'` / `export … from '…'` / `import '…'`
+    // `require('…')` / dynamic `import('…')`
+    const pats = [
+      /\bfrom\s*['"]([^'"\n]+)['"]/g,
+      /\bimport\s*['"]([^'"\n]+)['"]/g,
+      /\brequire\(\s*['"]([^'"\n]+)['"]\s*\)/g,
+      /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g,
+    ];
+    for (const re of pats) {
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) push(m[1]);
+    }
+    return out;
+  }
+
+  if (lang === 'c') {
+    // Quoted includes only. `<stdio.h>` is a system header, never a repo file.
+    const re = /^[ \t]*#[ \t]*include[ \t]+"([^"\n]+)"/gm;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) push(m[1]);
+    return out;
+  }
+
+  const lines = text.split('\n');
+
+  if (lang === 'py') {
+    for (const raw of lines) {
+      const line = raw.trim();
+      const from = /^from\s+([.\w]+)\s+import\b/.exec(line);
+      if (from) { push(from[1]); continue; }
+      const imp = /^import\s+(.+)$/.exec(line);
+      if (!imp) continue;
+      for (const part of imp[1].split(',')) {
+        const name = part.trim().split(/\s+as\s+/)[0].trim();
+        if (/^[A-Za-z_.][\w.]*$/.test(name)) push(name);
+      }
+    }
+    return out;
+  }
+
+  if (lang === 'rs') {
+    for (const raw of lines) {
+      const line = raw.trim();
+      const use = /^(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/.exec(line);
+      if (use) { push(use[1].replace(/:+$/, '')); continue; }
+      const mod = /^(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/.exec(line);
+      if (mod) push(mod[1]);
+    }
+    return out;
+  }
+
+  if (lang === 'go') {
+    let inBlock = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!inBlock) {
+        if (/^import\s*\($/.test(line)) { inBlock = true; continue; }
+        const one = /^import\s+(?:[\w.]+\s+)?"([^"]+)"/.exec(line);
+        if (one) push(one[1]);
+        continue;
+      }
+      if (line.startsWith(')')) { inBlock = false; continue; }
+      const inner = /^(?:[\w.]+\s+)?"([^"]+)"/.exec(line);
+      if (inner) push(inner[1]);
+    }
+    return out;
+  }
+
+  if (lang === 'jvm') {
+    for (const raw of lines) {
+      const line = raw.trim();
+      const imp = /^import\s+(?:static\s+)?([\w.]+)\s*;/.exec(line);
+      if (imp) { push(imp[1]); continue; }
+      // C# `using X;` and `using Alias = X;` -- never `using (` or `using var`.
+      const usg = /^using\s+(?:static\s+)?(?:[A-Za-z_]\w*\s*=\s*)?([\w.]+)\s*;/.exec(line);
+      if (usg) push(usg[1]);
+    }
+    return out;
+  }
+
+  return out;
+}
+
+/** `client/src/lib` + `../util` -> `client/src/util`. '' if it climbs out. */
+function joinPath(dir: string, rel: string): string {
+  const segs = dir.length > 0 ? dir.split('/') : [];
+  for (const s of rel.split('/')) {
+    if (s.length === 0 || s === '.') continue;
+    if (s === '..') {
+      if (segs.length === 0) return '';
+      segs.pop();
+      continue;
+    }
+    segs.push(s);
+  }
+  return segs.join('/');
+}
+
+/**
+ * Every dotted suffix of `dotted`, longest first, down to TWO segments.
+ *
+ * Never down to one. `import json` in a Python file is the standard library,
+ * and a repo that happens to hold `plugin/hooks/hooks.json` would otherwise
+ * turn it into an edge -- a wrong answer that looks exactly like a right one.
+ * A one-segment specifier is handled separately, as a same-directory sibling.
+ */
+function importCandidates(dotted: string): string[] {
+  if (dotted.length === 0) return [];
+  const segs = dotted.split('.').filter(s => s.length > 0);
+  if (segs.length < 2) return [];
+  const out: string[] = [];
+  for (let start = 0; start <= segs.length - 2; start++) {
+    out.push(segs.slice(start).join('.'));
+  }
+  return out;
+}
+
+/** The dotted module path of every node in a repo, scanned once per call. */
+type ModIndex = { id: bigint; mod: string }[];
+
+type Resolution = { ids: bigint[]; how: 'exact' | 'suffix' | 'ambiguous' | 'none' };
+
+/**
+ * An import specifier -> the node ids of the repo file it names, or nothing.
+ *
+ * TWO shapes, and both end at the SAME rule `report_touch` uses -- `dottedPath`
+ * for the normalisation and `suffixMatch` for the comparison. One
+ * implementation, so the resolver a human reads about in the tooltip and the
+ * resolver a touch goes through cannot drift apart.
+ *
+ *   RELATIVE (`./store`, `../lib/util`, `from .models import`, `#include "x.h"`)
+ *     is joined against the importing file's own directory, so it names exactly
+ *     one file and is matched at full length. A bare directory also tries
+ *     `<dir>/index`, which is what a JS resolver does.
+ *
+ *   PACKAGE (`django.forms.fields`, `crate::graph::walk`, `com.acme.Thing`)
+ *     is matched by longest dotted suffix, because the repo's own prefix
+ *     (`src/`, a Go module path, a Java source root) is not in the specifier.
+ *
+ * Nothing is guessed. A specifier that matches no file, or that matches more
+ * than MAX_IMPORT_FANOUT files and is therefore not evidence of anything, is
+ * dropped and counted.
+ */
+function resolveImportSpec(
+  spec: string,
+  importerPath: string,
+  lang: Lang,
+  mods: ModIndex
+): Resolution {
+  const hit = (cand: string): bigint[] => {
+    const ids: bigint[] = [];
+    for (const m of mods) if (suffixMatch(m.mod, cand)) ids.push(m.id);
+    return ids;
+  };
+
+  const dir = dirOf(importerPath);
+
+  // ---- relative -----------------------------------------------------------
+  let relBase: string | null = null;
+  if (lang === 'py' && spec.startsWith('.')) {
+    let ups = 0;
+    while (ups < spec.length && spec.charAt(ups) === '.') ups += 1;
+    let d = dir;
+    for (let i = 1; i < ups; i++) {
+      const up = parentDir(d);
+      if (up === null) { d = ''; break; }
+      d = up;
+    }
+    const rest = spec.slice(ups).split('.').join('/');
+    relBase = rest.length > 0 ? joinPath(d, rest) : d;
+  } else if (lang === 'rs' && (spec === 'super' || spec.startsWith('super.') || spec.startsWith('super:'))) {
+    const up = parentDir(dir);
+    const rest = spec.replace(/^super(?:::|\.)?/, '').split(/::|\./).join('/');
+    relBase = up === null ? '' : joinPath(up, rest);
+  } else if (spec.startsWith('./') || spec.startsWith('../') || spec === '.' || spec === '..') {
+    relBase = joinPath(dir, spec);
+  } else if (lang === 'c') {
+    // A quoted include is relative to the includer first, then to any root.
+    relBase = joinPath(dir, spec);
+  }
+
+  if (relBase !== null) {
+    for (const cand of [dottedPath(relBase), dottedPath(`${relBase}/index`)]) {
+      if (cand.length === 0) continue;
+      const ids = hit(cand);
+      if (ids.length > 0 && ids.length <= MAX_IMPORT_FANOUT) return { ids, how: 'exact' };
+      if (ids.length > MAX_IMPORT_FANOUT) return { ids: [], how: 'ambiguous' };
+    }
+    // A quoted C include also legitimately names a file by a repo-root path.
+    if (lang !== 'c') return { ids: [], how: 'none' };
+  }
+
+  // ---- package style ------------------------------------------------------
+  //
+  // A bare JS specifier with no slash (`react`, `lodash`) is a node_modules
+  // package by definition, and matching it against a file that happens to be
+  // called `react.js` would invent an edge. Skipped, not guessed.
+  if (lang === 'js' && spec.indexOf('/') === -1) return { ids: [], how: 'none' };
+
+  let norm = spec.split('::').join('.').split('/').join('.');
+  if (lang === 'rs') norm = norm.replace(/^(?:crate|self)\./, '');
+  const dotted = dottedPath(norm.split('.').join('/'));
+
+  // A ONE-SEGMENT specifier (`import map_room`, `import json`) is only a file
+  // in this repo if that file is sitting right next to the importer. Matched
+  // repo-wide it would catch anything whose module happens to end in that
+  // word, which is how `import json` became an edge to `hooks.json`.
+  if (dotted.indexOf('.') === -1) {
+    const sib = dottedPath(joinPath(dir, dotted));
+    if (sib.length === 0) return { ids: [], how: 'none' };
+    const ids = hit(sib);
+    if (ids.length === 0) return { ids: [], how: 'none' };
+    if (ids.length > MAX_IMPORT_FANOUT) return { ids: [], how: 'ambiguous' };
+    return { ids, how: 'exact' };
+  }
+
+  for (const cand of importCandidates(dotted)) {
+    const ids = hit(cand);
+    if (ids.length === 0) continue;
+    if (ids.length > MAX_IMPORT_FANOUT) return { ids: [], how: 'ambiguous' };
+    return { ids, how: 'suffix' };
+  }
+  return { ids: [], how: 'none' };
+}
+
+// A named callable, class or top-level binding. This is what block height is
+// a function of, so it is a LINE YOU CAN GO AND LOOK AT, not an estimate.
+const SYM_PATTERNS: RegExp[] = [
+  /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*[A-Za-z_$]/,
+  /^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+[A-Za-z_$]/,
+  /^(?:export\s+)?(?:declare\s+)?(?:interface|enum|struct|trait|impl)\s+[A-Za-z_$]/,
+  /^(?:export\s+)?type\s+[A-Za-z_$][\w$]*\s*[=<]/,
+  /^(?:async\s+)?def\s+[A-Za-z_]/,
+  /^(?:pub(?:\([^)]*\))?\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+[A-Za-z_]/,
+  /^func\s*(?:\([^)]*\)\s*)?[A-Za-z_]/,
+  /^(?:public|private|protected|internal)\s+(?:static\s+)?[\w<>\[\],. ]+\s+[A-Za-z_]\w*\s*\(/,
+];
+/** `export const x = …`, or a top-level `const x = …` at column 0. */
+const SYM_BINDING = /^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*[=:]/;
+
+function countSymbols(text: string): number {
+  let n = 0;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.length === 0) continue;
+    if (line.startsWith('//') || line.startsWith('*') || line.startsWith('/*')) continue;
+    if (line.startsWith('#') && !line.startsWith('#[')) continue;
+    let matched = false;
+    for (const re of SYM_PATTERNS) {
+      if (re.test(line)) { matched = true; break; }
+    }
+    // A binding only counts at the top level -- otherwise every local in every
+    // function body would be a "symbol" and height would measure verbosity.
+    if (!matched && SYM_BINDING.test(line) && (raw.charAt(0) !== ' ' && raw.charAt(0) !== '\t')) {
+      matched = true;
+    }
+    if (matched) n += 1;
+  }
+  return n;
+}
+
+/** The strict schema. `additionalProperties:false` and full `required` throughout. */
+function fileFactsSchema(): unknown {
+  return {
+    type: 'object',
+    properties: {
+      files: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            summary: { type: 'string' },
+            role: {
+              type: 'string',
+              enum: ['entry', 'config', 'model', 'view', 'controller', 'test', 'util', 'generated'],
+            },
+            symbols: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  line: { type: 'integer' },
+                  kind: { type: 'string' },
+                },
+                required: ['name', 'line', 'kind'],
+                additionalProperties: false,
+              },
+            },
+            importance: { type: 'integer', minimum: 1, maximum: 5 },
+          },
+          required: ['path', 'summary', 'role', 'symbols', 'importance'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['files'],
+    additionalProperties: false,
+  };
+}
+
+type LlmFact = { summary: string; role: string; importance: number; symbols: number };
+
+/** Clamp to what the column can hold, so a long answer truncates rather than throws. */
+function clampSummary(s: string): string {
+  const one = String(s || '').trim().replace(/\s+/g, ' ');
+  return one.length > 300 ? one.slice(0, 300) : one;
+}
+
+/**
+ * Deepen an indexed repo: real import edges, and a real size for every block.
+ *
+ * Resumable and idempotent. `offset`/`limit` walk the repo's file nodes in id
+ * order -- which `index_repo` made deterministic by sorting the tree -- so the
+ * client can drive batches, stop halfway, and pick up exactly where it left
+ * off. Re-running a batch replaces that batch's IMPORTS edges rather than
+ * doubling them.
+ *
+ * `api_key` is an ARGUMENT. It is never stored, never logged and never a
+ * constant. Passing '' is supported and does something useful: the regex half
+ * still runs, so imports and block heights land WITHOUT any model at all. The
+ * model is only ever asked for prose.
+ *
+ * Returns `ok offset= done= total= skipped= imports=` plus the resolution
+ * counters, because "how many imports did you throw away" is a question this
+ * has to be able to answer out loud.
+ */
+export const enrichRepo = spacetimedb.procedure(
+  { name: 'enrich_repo' },
+  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
+  t.string(),
+  (ctx, { repo_id, offset, limit, api_key }) => {
+    const key = api_key.trim();
+    const want = Math.max(1, Math.min(MAX_ENRICH_LIMIT, Number(limit) || 0));
+    const from = Math.max(0, Number(offset) || 0);
+
+    // ---- 1. read the repo out of the database, then let the tx go ----------
+    let owner = '';
+    let ghRepo = '';
+    let total = 0;
+    let batch: { id: bigint; path: string }[] = [];
+    const mods: ModIndex = [];
+    let bad = '';
+
+    ctx.withTx(tx => {
+      const r = tx.db.repo.id.find(repo_id);
+      if (!r) { bad = `error: no repo ${repo_id}`; return; }
+      const or = ownerRepoOf(tx.db, repo_id);
+      if (!or) { bad = `error: repo ${repo_id} (${r.slug}) has no owner/repo to fetch from`; return; }
+      owner = or.owner;
+      ghRepo = or.repo;
+
+      const filesInRepo: { id: bigint; path: string }[] = [];
+      for (const n of tx.db.node.repo_id.filter(repo_id)) {
+        mods.push({ id: n.id, mod: nodeModule(n.qual) });
+        // Only nodes `index_repo` minted are one-node-per-file, which is what
+        // makes "fetch this node's file" a sane thing to do. Seeded graphs are
+        // per-FUNCTION: enriching them would fetch the same file hundreds of
+        // times. NewLand is a path with no file behind it yet.
+        if (n.id < INDEX_ID_BASE) continue;
+        if (n.kind === 'NewLand') continue;
+        const path = pathOfNode(n.qual);
+        if (path.length === 0) continue;
+        filesInRepo.push({ id: n.id, path });
+      }
+      if (filesInRepo.length === 0) {
+        bad =
+          `error: repo ${repo_id} (${r.slug}) holds no index_repo file nodes; ` +
+          `enrich_repo only deepens maps built by index_repo`;
+        return;
+      }
+      filesInRepo.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      total = filesInRepo.length;
+      batch = filesInRepo.slice(from, from + want);
+    });
+    if (bad.length > 0) return bad;
+    if (batch.length === 0) {
+      return `ok offset=${from} done=0 total=${total} skipped=0 imports=0 note=past-the-end`;
+    }
+
+    // ---- 2. fetch each file (no transaction is open) -----------------------
+    type Fetched = { id: bigint; path: string; text: string; loc: number; symbols: number };
+    const got: Fetched[] = [];
+    let skipped = 0;
+    const misses: string[] = [];
+    for (const f of batch) {
+      let res;
+      try {
+        res = ctx.http.fetch(
+          `https://raw.githubusercontent.com/${owner}/${ghRepo}/HEAD/${f.path}`,
+          { method: 'GET', headers: { 'User-Agent': 'map-room' } }
+        );
+      } catch {
+        skipped += 1;
+        if (misses.length < 3) misses.push(`${f.path}:fetch-threw`);
+        continue;
+      }
+      if (res.status !== 200) {
+        skipped += 1;
+        if (misses.length < 3) misses.push(`${f.path}:${res.status}`);
+        continue;
+      }
+      const text = res.text().slice(0, ENRICH_FILE_CHARS);
+      got.push({
+        id: f.id,
+        path: f.path,
+        text,
+        loc: text.split('\n').length,
+        symbols: countSymbols(text),
+      });
+    }
+
+    // ---- 3. imports: regex, resolve, and count what was thrown away --------
+    type Pair = { src: bigint; dst: bigint };
+    const pairs: Pair[] = [];
+    const seenPair = new Set<string>();
+    let seen = 0;
+    let resolved = 0;
+    let unresolved = 0;
+    let ambiguous = 0;
+
+    for (const f of got) {
+      const lang = langOf(f.path);
+      const specs = extractImports(f.text, lang);
+      let written = 0;
+      const done = new Set<string>();
+      for (const spec of specs) {
+        if (done.has(spec)) continue;
+        done.add(spec);
+        seen += 1;
+        if (written >= MAX_IMPORTS_PER_FILE) continue;
+        const r = resolveImportSpec(spec, f.path, lang, mods);
+        if (r.how === 'ambiguous') { ambiguous += 1; continue; }
+        if (r.ids.length === 0) { unresolved += 1; continue; }
+        resolved += 1;
+        for (const dst of r.ids) {
+          if (dst === f.id) continue; // a file does not import itself
+          const k = `${f.id}|${dst}`;
+          if (seenPair.has(k)) continue;
+          seenPair.add(k);
+          pairs.push({ src: f.id, dst });
+          written += 1;
+        }
+      }
+    }
+
+    // ---- 4. one batched model call, for prose only -------------------------
+    const facts = new Map<string, LlmFact>();
+    let llm = 'skipped';
+    let modelSymbols = 0;
+    if (key.length > 0 && got.length > 0) {
+      const blocks: string[] = [];
+      for (const f of got) {
+        blocks.push(
+          `=== FILE: ${f.path} (${f.loc} lines) ===\n${f.text.slice(0, LLM_FILE_CHARS)}`
+        );
+      }
+      const system =
+        'You label files on a map of a codebase. For every file you are given, ' +
+        'return exactly one object, echoing its path back VERBATIM. Never invent ' +
+        'a file that was not given to you. summary: one sentence, start with a ' +
+        'verb, at most 20 words, no markdown, no filename. role: the single best ' +
+        'fit. symbols: the top-level named functions, classes and exported ' +
+        'constants, at most 12 per file, with the 1-based line each is declared ' +
+        'on. importance: 1 = incidental, 5 = the file you would read first.';
+
+      let llmRes;
+      try {
+        llmRes = ctx.http.fetch(OPENAI_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`,
+            'User-Agent': 'map-room',
+          },
+          body: JSON.stringify({
+            model: OPENAI_MODEL,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: blocks.join('\n\n') },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: { name: 'file_facts', strict: true, schema: fileFactsSchema() },
+            },
+          }),
+        });
+      } catch {
+        llmRes = null;
+      }
+
+      if (!llmRes) {
+        llm = 'unreachable';
+      } else if (llmRes.status !== 200) {
+        // The status is the honest answer. 401 means the key is wrong, and that
+        // is a fact worth surfacing rather than swallowing into "0 summaries".
+        llm = `http-${llmRes.status}`;
+      } else {
+        let content = '';
+        try {
+          const data = llmRes.json() as {
+            choices?: { message?: { content?: string } }[];
+          };
+          content = data.choices?.[0]?.message?.content ?? '';
+        } catch {
+          content = '';
+        }
+        if (content.length === 0) {
+          llm = 'empty';
+        } else {
+          try {
+            const parsed = JSON.parse(content) as {
+              files?: {
+                path?: string; summary?: string; role?: string;
+                importance?: number; symbols?: unknown[];
+              }[];
+            };
+            const rows = Array.isArray(parsed.files) ? parsed.files : [];
+            for (const row of rows) {
+              const p = typeof row.path === 'string' ? row.path.trim() : '';
+              if (p.length === 0) continue;
+              const syms = Array.isArray(row.symbols) ? row.symbols.length : 0;
+              modelSymbols += syms;
+              facts.set(p, {
+                summary: clampSummary(row.summary ?? ''),
+                role: typeof row.role === 'string' ? row.role : '',
+                importance: Math.max(0, Math.min(5, Math.trunc(Number(row.importance) || 0))),
+                symbols: syms,
+              });
+            }
+            llm = `${OPENAI_MODEL}:${facts.size}/${got.length}`;
+          } catch {
+            llm = 'unparseable';
+          }
+        }
+      }
+    }
+
+    // ---- 5. write: edges, then file_meta -----------------------------------
+    let edgesWritten = 0;
+    let edgesDropped = 0;
+    ctx.withTx(tx => {
+      // Re-running a batch REPLACES its import edges. CONTAINS / IN_DIR are
+      // untouched: they are a weaker structural layer that still answers
+      // "what is near this" when a file imports nothing at all.
+      const stale: bigint[] = [];
+      for (const f of got) {
+        for (const e of tx.db.edge.src.filter(f.id)) {
+          if (e.kind === 'IMPORTS') stale.push(e.id);
+        }
+      }
+      for (const id of stale) {
+        tx.db.edge.id.delete(id);
+        edgesDropped += 1;
+      }
+
+      for (const p of pairs) {
+        tx.db.edge.insert({ id: 0n, repo_id, src: p.src, dst: p.dst, kind: 'IMPORTS' });
+        edgesWritten += 1;
+      }
+
+      for (const f of got) {
+        const fact = facts.get(f.path);
+        const row = {
+          node_id: f.id,
+          repo_id,
+          symbols: f.symbols,
+          loc: f.loc,
+          summary: fact ? fact.summary : '',
+          role: fact ? fact.role : '',
+          importance: fact ? fact.importance : 0,
+          at: tx.timestamp,
+        };
+        if (tx.db.file_meta.node_id.find(f.id)) {
+          tx.db.file_meta.node_id.update(row);
+        } else {
+          tx.db.file_meta.insert(row);
+        }
+      }
+
+      // The repo's edge count is a number a human reads off the gallery card;
+      // leaving it at the index-time value would make the map look unchanged.
+      const r = tx.db.repo.id.find(repo_id);
+      if (r) {
+        let n = 0;
+        for (const _e of tx.db.edge.repo_id.filter(repo_id)) n += 1;
+        tx.db.repo.id.update({ ...r, edge_count: n });
+      }
+    });
+
+    const rate = seen > 0 ? Math.round((resolved / seen) * 100) : 0;
+    return (
+      `ok offset=${from} done=${got.length} total=${total} skipped=${skipped} ` +
+      `imports=${edgesWritten} seen=${seen} resolved=${resolved} rate=${rate}% ` +
+      `unresolved=${unresolved} ambiguous=${ambiguous} replaced=${edgesDropped} ` +
+      `sym_regex=${got.reduce((a, f) => a + f.symbols, 0)} sym_model=${modelSymbols} ` +
+      `llm=${llm} next=${from + batch.length}` +
+      (misses.length > 0 ? ` misses=${misses.join(',')}` : '')
+    );
   }
 );
