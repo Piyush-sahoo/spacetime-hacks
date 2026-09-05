@@ -358,9 +358,21 @@ function Asked({ requests, territory }) {
           return (
             <li key={key(r.id)} className={cls}>
               <span style={{ fontSize: 12.5 }}>{f ? f.path : `node ${key(r.nodeId)}`}</span>
+              {/*
+                `r.note` was the path again, so every row printed its own title
+                twice — and the stored copy was written by the old path guesser,
+                so a .jsx file read back as .py forever. What is worth a line
+                here is what the region DOES, which is the thing somebody is
+                deciding whether to send an agent to.
+              */}
+              {f && f.summary ? (
+                <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0' }}>
+                  {f.summary}
+                </div>
+              ) : null}
               <div className="ans">
                 <span className="eyebrow">{String(r.status).toUpperCase()}</span>
-                {r.note ? <span style={{ fontSize: 11.5 }}> · {r.note}</span> : null}
+                {r.result ? <span style={{ fontSize: 11.5 }}> · {r.result}</span> : null}
                 {r.claimedBy && idHex(r.claimedBy) ? (
                   <span style={{ fontSize: 11 }}> · {idHex(r.claimedBy).slice(0, 8)}</span>
                 ) : null}
