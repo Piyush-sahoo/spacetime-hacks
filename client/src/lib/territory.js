@@ -23,9 +23,40 @@ export function moduleOf(qual) {
   return m || 'unknown'
 }
 
-/** `django.core.management.base` → `django/core/management/base.py` */
+/**
+ * `django.core.management.base` -> `django/core/management/base.py`
+ *
+ * The extension is a GUESS and only a correct one for the seeded Python corpus.
+ * Indexed repos carry the real basename after `::` in the qual
+ * (`client.src.lib.store::store.js`), so `pathFromQual` below is preferred and
+ * this is the fallback for a node that has no basename to offer.
+ */
 export function prettyPath(mod) {
   return `${String(mod).split('.').join('/')}.py`
+}
+
+/**
+ * The real path, when the node knows it.
+ *
+ * A dotted module cannot be reversed into a path — `postcss.config.js` and
+ * `postcss/config.js` dot identically — so appending `.py` to everything wrote
+ * `territory.py` under a `.js` file and `client/postcss/config.py` for a file at
+ * the root. The basename after `::` is exactly what was indexed, extension and
+ * all, so it settles both the extension and where the directory boundary falls.
+ */
+export function pathFromQual(qual, mod) {
+  const q = String(qual || '')
+  const cut = q.indexOf('::')
+  const base = cut >= 0 ? q.slice(cut + 2).trim() : ''
+  if (!base) return prettyPath(mod)
+  const segs = String(mod).split('.')
+  // The module ends in the basename's STEM, not the basename: `territory.js`
+  // contributed one segment (`territory`), `postcss.config.js` contributed two.
+  // So drop one fewer than the basename's dotted parts — the extension is not
+  // in the module at all.
+  const drop = Math.max(1, base.split('.').length - 1)
+  const dirs = segs.slice(0, Math.max(0, segs.length - drop))
+  return dirs.length ? `${dirs.join('/')}/${base}` : base
 }
 
 // Python packages are full of files whose basename says nothing — `tests`,
@@ -131,7 +162,7 @@ export function buildTerritory(nodes, meta, landPaths) {
     const mod = moduleOf(n.qual)
     let f = files.get(mod)
     if (!f) {
-      f = { mod, path: prettyPath(mod), label: labelOf(mod), district: districtOf(mod), dir: null, ids: [], count: 0, surveyed: 0, symbols: null, loc: 0, summary: '', role: '', importance: 0, pick: null, tests: 0, newLand: false, landPath: '' }
+      f = { mod, path: pathFromQual(n.qual, mod), label: labelOf(mod), district: districtOf(mod), dir: null, ids: [], count: 0, surveyed: 0, symbols: null, loc: 0, summary: '', role: '', importance: 0, pick: null, tests: 0, newLand: false, landPath: '' }
       files.set(mod, f)
     }
     f.ids.push(n.id)

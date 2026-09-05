@@ -1802,16 +1802,14 @@ export const summarizeRegion = spacetimedb.procedure(
 //
 //   PROSE comes from the model, because a sentence cannot corrupt a graph.
 
-/** The middle tier of the GPT-5.6 family: "balanced intelligence and cost".
- *  Ids verified against https://developers.openai.com/api/docs/models via
- *  ctx7, not recalled -- gpt-5.6-sol (frontier), gpt-5.6-terra (balanced),
- *  gpt-5.6-luna (high-volume). The bare `gpt-5.6` alias resolves to sol.
+/** Chosen by asking the key what it can reach, not by preference.
  *
- *  Terra rather than sol because this call runs INSIDE a procedure, where a
- *  frontier reasoning step is a timeout risk, and the task -- one sentence and
- *  a category per file -- is extraction, not multi-step reasoning. Terra rather
- *  than luna because these sentences are read by people. */
-const OPENAI_MODEL = 'gpt-5.6-terra';
+ *  GET /v1/models on the key in use returns three models, of which exactly one
+ *  is chat-capable: gpt-5-nano. gpt-5.6-terra, -luna and gpt-4.1-nano all come
+ *  back `model_not_found`, so a nicer tier is not a config change, it needs an
+ *  account with access. Verified working here with strict structured outputs,
+ *  which is the only property this call actually depends on. */
+const OPENAI_MODEL = 'gpt-5-nano';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 /** ctx.http.fetch defaults to 30s and caps at 180s. A batch on the balanced
