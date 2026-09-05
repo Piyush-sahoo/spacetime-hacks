@@ -60,14 +60,22 @@ def cmd_complete(argv) -> int:
 
 def cmd_coverage(argv) -> int:
     cfg, token = _ctx()
-    total = _scalar(m.sql(cfg, token, "SELECT COUNT(*) AS n FROM node"))
+    # Scope the denominator to this repo: `node` holds every repo's graph, so an
+    # unscoped COUNT(*) silently divides by the whole database.
+    total = _scalar(m.sql(
+        cfg, token,
+        "SELECT COUNT(*) AS n FROM node WHERE repo_id = %d" % int(cfg["repo_id"]),
+    ))
     # No GROUP BY in SpacetimeDB SQL, and aggregates need an alias.
     explored = _scalar(m.sql(
         cfg, token,
         "SELECT COUNT(*) AS n FROM node_cov WHERE repo_id = %d AND explored = true"
         % int(cfg["repo_id"]),
     ))
-    touches = _scalar(m.sql(cfg, token, "SELECT COUNT(*) AS n FROM touch"))
+    touches = _scalar(m.sql(
+        cfg, token,
+        "SELECT COUNT(*) AS n FROM touch WHERE repo_id = %d" % int(cfg["repo_id"]),
+    ))
     if total is None:
         print("Could not reach %s/%s." % (cfg["host"], cfg["db"]))
         return 1
@@ -76,7 +84,8 @@ def cmd_coverage(argv) -> int:
         return 0
     pct = (100.0 * explored / total) if total else 0.0
     filled = int(round(pct / 5))
-    print("Coverage: %d of %d nodes explored (%.1f%%)" % (explored, total, pct))
+    print("Coverage (repo %s): %d of %d nodes explored (%.1f%%)"
+          % (cfg["repo_id"], explored, total, pct))
     print("  [%s%s]" % ("#" * filled, "." * (20 - filled)))
     if touches is not None:
         print("  %d touches reported" % touches)

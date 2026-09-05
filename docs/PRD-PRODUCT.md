@@ -7,8 +7,8 @@ actually does with it.*
 
 ## The one-liner
 
-**For engineers running AI coding agents — paste your repo and watch, with your
-team, the map your agent is actually using, and the roads it can't see.**
+**Watch your AI agent explore your codebase, live — and when you see a place it
+never looked, tap it, and the agent goes and looks.**
 
 ---
 
@@ -65,24 +65,60 @@ Nothing warns you about the red path. From inside the tool, the search *succeede
 
 ## What the product does
 
-You open a room. Anyone with the link is inside it with you — no account, no
-password, no email. You pick a change. Then everyone in the room watches the same
-thing at the same time:
+**You open a link.** No account, no password, no email. The map of your codebase is
+on screen — every file, every function — and it is **all dark**.
 
-The map lights up outward from the change. One step, then the next, then the next —
-the way the agent would explore it. It spreads, peaks, narrows, and stops.
+Dark means: nobody has looked here yet.
 
-And then you see what it never reached.
+**Your agent starts working.** You give Claude Code a task. It reads files,
+searches, edits. Every file it touches **lights up on the map, as it happens** — not
+in a log afterwards. You watch its attention spread outward, like someone walking
+through a dark building turning on lamps.
 
-The test that catches this exact bug is sitting right there, unlit. Not because the
-search gave up early — it finished, completely — but because in this map, there is
-no path to it.
+**Then you notice the light stops.** There is a whole region still dark. The agent
+finished, said it was done, and never went there.
 
-Everyone in the room sees that at the same moment.
+That is the part nobody has been able to see before. The agent didn't tell you what
+it skipped — it couldn't. From inside, it looked finished.
 
-### What that actually looks like
+**You tap the dark part.** That's the whole interaction.
 
-Each bar is one step outward from the change. This is a real search on a real bug:
+**The agent goes and looks.** Your tap lands in the database. The agent picks it up,
+spawns a helper pointed at exactly that region, and explores it — and you watch that
+region light up too.
+
+### And everyone sees it
+
+Your teammate opens the same link on a laptop. Your lead opens it on a phone. They
+see **everything you see, at the same instant** — the same spread, the same dark
+patches. When you tap, it goes amber on their screen. When the agent finishes it,
+green, on every screen at once.
+
+Nobody refreshes. Nobody screenshares. You are all just in it, arguing about the
+same dark corner while the agent works.
+
+### Why the dark part is most of the map
+
+An agent's context is finite, so it keeps only the top few hundred symbols from your
+codebase. Measured against 172 real bug fixes, here is what survives that:
+
+```
+how much of the map the agent holds  →  how often it finds the test that catches the bug
+
+full map    ████████████████████████████████████████  55%
+top 400     ██▌                                        5%
+top 200                                                0%
+top 100                                                0%
+top 50                                                 0%
+```
+
+The agent is not looking at your codebase. It is looking at a slice of it, chosen for
+it, that nothing shows you. **The dark region is not an edge case — it is the
+majority of your code, every single run.**
+
+### What a search looks like
+
+Each bar is one step outward from a change. This is a real search on a real bug:
 
 ```
 step 1  █                                                    1 place
@@ -115,10 +151,14 @@ mindmap
       See who is here
       Live presence
       Everyone sees one screen
-    Watch
-      Pick a change
-      It spreads step by step
-      Paints for everyone at once
+    Watch the agent
+      Its attention lights up live
+      Dark = never looked
+      Everyone sees the same spread
+    Steer it
+      Tap a dark region
+      Agent picks it up
+      Watch it light up
     Learn
       Where it stopped
       Out of map or out of budget
@@ -132,14 +172,16 @@ mindmap
 | | Feature | What the user gets |
 |---|---|---|
 | **F1** | **Join by link** | Open a URL and you're in. No signup, no password, no email. A name is optional. |
-| **F2** | **See who's here** | Everyone in the room appears live, and disappears when they leave. |
-| **F3** | **Pick a change** | Choose the file or function that was changed. This is the starting point. |
-| **F4** | **Watch it spread** | The search paints outward step by step, on **everyone's screen at once**. Nobody refreshes. Nobody clicks anything to keep up. |
-| **F5** | **See where it stops** | The moment it runs out — and whether it ran out of *budget* or ran out of *map*. Those are very different, and the product says which. |
-| **F6** | **See what it missed** | The test that guards this bug, lit red, unreached. |
-| **F7** | **Get the verdict** | A plain answer: *don't let the agent skip here — run everything.* With the number behind it. |
-| **F8** | **Straight talk about the number** | Where a number can't honestly be computed, the product says so instead of inventing one. |
-| **F9** | **Works on a phone** | The whole thing, on the device you actually have. |
+| **F2** | **See who's here** | Everyone in the room appears live — **including the AI agent**, which shows up as a participant like anyone else. |
+| **F3** | **Watch the agent explore** | Every file it reads or edits lights up **as it happens**. Its attention, live, on a map. |
+| **F4** | **See what it never touched** | The dark regions. This is the finding, and it is visible at a glance. |
+| **F5** | **Tap a dark region** | One tap sends the agent there. It goes amber for everyone, then green when the agent has explored it. |
+| **F6** | **Trace a change** | Pick a changed file and watch the search paint outward step by step, on everyone's screen at once. |
+| **F7** | **See where a search stops** | The moment it runs out — and whether it ran out of *budget* or ran out of *map*. Those are very different, and the product says which. |
+| **F8** | **See the test it missed** | The test that guards this bug, lit red, unreached. |
+| **F9** | **Get the verdict** | A plain answer: *don't let the agent skip here — run everything.* With the number behind it. |
+| **F10** | **Straight talk about the number** | Where a number can't honestly be computed, the product says so instead of inventing one. |
+| **F11** | **Works on a phone** | The whole thing, on the device you actually have. |
 
 ---
 
