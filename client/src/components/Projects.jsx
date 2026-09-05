@@ -66,7 +66,7 @@ export default function Projects() {
       <h1>Projects on the map</h1>
       <p className="fn-lede">
         Every repository that has been indexed. Open one to get its two links and
-        the four commands that put your own agent on it. This list is live — it
+        the six steps that put your own agent on it. This list is live — it
         moves as agents connect and as repositories are added.
       </p>
 

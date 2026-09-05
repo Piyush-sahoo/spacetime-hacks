@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { watchDirectory } from '../lib/live'
 import {
-  baseLink, liveAgentCount, millis, projectsLink, sessionLink,
+  baseLink, isLiveSession, liveAgentCount, millis, projectsLink, sessionLink,
 } from '../lib/funnel'
 import { Copy, Shell, Step, go } from './FunnelKit.jsx'
 
@@ -43,6 +43,10 @@ export default function ProjectPage({ slug }) {
 
   const live = repo ? liveAgentCount(sessions, repo.id) : 0
   const latest = mine[0]
+  // Whether the LINKED session is here, which is a different question from
+  // whether anybody is: an ended session must not be captioned "live now"
+  // because some other agent happens to be connected to the same repository.
+  const latestLive = isLiveSession(latest)
   const base = baseLink(slug)
 
   if (ready && !repo) {
@@ -96,7 +100,7 @@ export default function ProjectPage({ slug }) {
         {latest ? (
           <div className="fn-link">
             <span className="fn-k">
-              This session {live > 0 ? '· live now' : `· last seen ${ago(millis(latest.lastAt ?? latest.last_at))}`}
+              This session {latestLive ? '· live now' : `· last seen ${ago(millis(latest.lastAt ?? latest.last_at))}`}
             </span>
             <p className="fn-what">
               One agent's route, and nothing else. <span className="fn-num">
@@ -167,10 +171,13 @@ export default function ProjectPage({ slug }) {
         <Step
           n={4}
           title="Confirm what got installed"
+          why="The hook count is the one number that tells you whether the build you installed is the current one. Claude Code caches a plugin by version number, so an install that says it succeeded can still be handing you an older copy."
           expect={<>
             <b>Expect:</b> <code>Skills (1)</code> and <code>Hooks (5)</code> —
             PostToolUse, UserPromptSubmit, Stop, SessionEnd, SubagentStop. If it
-            says Hooks (3) you have an older build; pull and reinstall.
+            says <code>Hooks (3)</code> you are on a cached older build: go back
+            and run step 2 again, then step 3. See the last entry under{' '}
+            <em>When it does not work</em>.
           </>}
         >
           <Copy title="check the install" text="claude plugin details map-room@map-room" />
@@ -199,11 +206,15 @@ export default function ProjectPage({ slug }) {
         >
           <Copy
             title="run the doctor"
-            text={`cd /path/to/your/repo\npython3 ~/.claude/plugins/marketplaces/map-room/plugin/scripts/map_room_cli.py doctor`}
+            text={'cd /path/to/your/repo\npython3 /path/to/spacetime-hacks/plugin/scripts/map_room_cli.py doctor'}
           />
           <p className="fn-why" style={{ margin: '0 0 6px' }}>
-            Or, from a checkout of The Map Room:{' '}
-            <code>python3 plugin/scripts/map_room_cli.py doctor</code>
+            Both paths matter: the <code>cd</code> is the repository being
+            checked — the doctor reads the current directory — and the script is
+            the one in the checkout you cloned in step 1. The plugin's own
+            installed copy lives under{' '}
+            <code>~/.claude/plugins/cache/map-room/map-room/&lt;version&gt;/scripts/</code>,
+            which moves every time the version changes; the checkout does not.
           </p>
         </Step>
       </ol>
@@ -259,6 +270,30 @@ export default function ProjectPage({ slug }) {
           <p className="fn-a">
             You have not restarted Claude Code since installing. Hooks load at
             session start. This is step 5 and it is the one people skip.
+          </p>
+        </li>
+        <li>
+          <p className="fn-q"><strong>python3 says it cannot open that file.</strong></p>
+          <p className="fn-a">
+            The doctor's path is wrong. There is no{' '}
+            <code>~/.claude/plugins/marketplaces/map-room/</code> — that
+            directory holds the marketplace only when it was added from a git
+            URL, and step 2 adds it from a local directory. Use the script in
+            the checkout you cloned, which is what step 6 copies.
+          </p>
+        </li>
+        <li>
+          <p className="fn-q"><strong>Step 4 says Hooks (3), and reinstalling does not change it.</strong></p>
+          <p className="fn-a">
+            Claude Code caches an installed plugin under{' '}
+            <code>~/.claude/plugins/cache/map-room/map-room/&lt;version&gt;/</code>,
+            keyed on the version in the manifest — so <code>install</code> is a
+            no-op when that version is already there, however much the code
+            behind it changed. Pull the checkout, run{' '}
+            <strong>step 2 again</strong> so the marketplace re-reads it, then
+            step 3. Confirm with step 4 before going further: on the old
+            three-hook build a session that ends never switches its agent off,
+            and the map keeps showing it as live.
           </p>
         </li>
         <li>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
 import { indexRepo } from '../lib/live'
-import { parseIndexResult, parseRepoInput, projectLink, projectsLink } from '../lib/funnel'
+import { isGithubSlug, parseIndexResult, parseRepoInput, projectLink, projectsLink } from '../lib/funnel'
 import { Shell, go } from './FunnelKit.jsx'
 import ConnBadge from './ConnBadge.jsx'
 
@@ -26,6 +26,31 @@ export default function Landing() {
     const m = new Map()
     for (const r of repos || []) if (r.slug) m.set(String(r.slug).toLowerCase(), r)
     return m
+  }, [repos])
+
+  /**
+   * What is on the map, counted from the map.
+   *
+   * This sentence used to be typed in ("Ten repositories..."), and it went
+   * stale the first time anybody indexed anything -- which is the one thing
+   * this page invites every visitor to do. It is the same rule the rest of the
+   * funnel follows: never state a number the database did not just report.
+   */
+  const alreadyHere = useMemo(() => {
+    // A row with no files is a failed index, not a map -- the gallery filters
+    // those out, so the count here has to filter them out too or the two pages
+    // disagree in front of the person.
+    const shown = (repos || []).filter((r) => Number(r.nodeCount ?? r.node_count ?? 0) > 0)
+    if (!shown.length) return 'Repositories that have already been indexed are in the gallery.'
+    const size = (r) => Number(r.nodeCount ?? r.node_count ?? 0)
+    // Name the biggest REAL `owner/repo`, never a SWE-bench instance id like
+    // `django__django-10097`: it is the largest row, but nobody recognises it,
+    // and the gallery already ranks a real slug ahead of one for that reason.
+    const named = shown.filter((r) => isGithubSlug(r.slug))
+    const big = (named.length ? named : shown).reduce((a, b) => (size(b) > size(a) ? b : a))
+    const small = Math.min(...shown.map(size))
+    return `${shown.length} repositories are already on the map, from a ${small}-file `
+      + `library to ${big.slug} at ${size(big).toLocaleString()} files.`
   }, [repos])
 
   const submit = useCallback(async (e) => {
@@ -182,10 +207,7 @@ export default function Landing() {
       )}
 
       <h2>Or just look at one that is already here</h2>
-      <p>
-        Ten repositories are already on the map, from a 13-file library to
-        django/django at 2,975 files.
-      </p>
+      <p>{alreadyHere}</p>
       <div className="actions">
         <button type="button" className="ctl" onClick={() => go(projectsLink())}>
           Browse the projects

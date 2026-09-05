@@ -84,9 +84,17 @@
 
 /* ── a copyable command / link ───────────────────────────────────────────── */
 .fn-copy { display: flex; align-items: stretch; gap: 0; margin: 0 0 8px; }
+/* A command or a link that is clipped is a broken instruction, even when the
+   Copy button still works — somebody reading the walkthrough has to be able to
+   SEE the whole thing. So these wrap rather than scroll: `pre-wrap` keeps the
+   newlines that separate a three-line command, and `anywhere` lets a long URL
+   break mid-token. It is also what stops a 90-character link from setting the
+   min-content width of its grid track and pushing the page sideways on a
+   phone — the failure this replaced. */
 .fn-copy pre {
   flex: 1; min-width: 0; margin: 0;
   border-right-width: 1.5px; border-color: var(--rule);
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .fn-copy button {
   font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
@@ -101,8 +109,13 @@
 .fn-copy button.on { background: var(--hi-bg); color: var(--hi-fg); }
 
 /* ── the two links ───────────────────────────────────────────────────────── */
-.fn-links { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-.fn-link { border: 1.5px solid var(--ink); padding: 12px 14px; }
+/* `minmax(0, 1fr)` rather than `1fr`: a grid track's default minimum is its
+   content's min-content width, so one unbreakable URL would widen the column
+   past the viewport and take the whole page sideways with it. */
+.fn-links { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.fn-link { border: 1.5px solid var(--ink); padding: 12px 14px; min-width: 0; }
+.fn-link pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fn-warn pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .fn-link .fn-k {
   font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--ink-2); display: block; margin-bottom: 2px;
@@ -192,7 +205,7 @@
 .fn-scroll { overflow-x: auto; }
 
 @media (max-width: 640px) {
-  .fn-links { grid-template-columns: 1fr; }
+  .fn-links { grid-template-columns: minmax(0, 1fr); }
   .fn-main { padding: 18px 12px 40px; }
   .fn-top { padding: 6px 12px; }
   .fn-copy { flex-direction: column; }

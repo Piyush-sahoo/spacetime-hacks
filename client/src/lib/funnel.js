@@ -131,14 +131,24 @@ export const isGithubSlug = (slug) => /^[^/\s]+\/[^/\s]+$/.test(String(slug || '
  */
 export const LIVE_WINDOW_MS = 120000
 
+/**
+ * Is THIS one agent here now?
+ *
+ * Split out of the count because the two questions are not the same one, and
+ * conflating them is how a session that has ended gets labelled "live now" on
+ * the strength of some *other* agent being connected to the same repository.
+ */
+export function isLiveSession(s, now = Date.now()) {
+  if (!s || !s.online) return false
+  return now - millis(s.lastAt ?? s.last_at) <= LIVE_WINDOW_MS
+}
+
 export function liveAgentCount(sessions, repoId, now = Date.now()) {
   const id = String(repoId)
   let n = 0
   for (const s of sessions || []) {
     if (String(s.repoId ?? s.repo_id) !== id) continue
-    if (!s.online) continue
-    if (now - millis(s.lastAt ?? s.last_at) > LIVE_WINDOW_MS) continue
-    n += 1
+    if (isLiveSession(s, now)) n += 1
   }
   return n
 }
