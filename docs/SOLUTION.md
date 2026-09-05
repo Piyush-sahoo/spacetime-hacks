@@ -7,10 +7,18 @@ is actually using, and the roads it can't see.
 
 ## The idea
 
-Take the walk that every graph-based test selector runs in a subprocess, and move
-it **inside a live database that pushes to every connected client**. The walk stops
-being a function that returns a set. It becomes an event several people watch
-happen to the same graph at the same time.
+Put the AI agent and the human **in the same room, looking at the same map.**
+
+The agent publishes what it explores as it works. The map lights up live. What stays
+dark is what the agent never looked at — and because a human can see it, a human can
+point at it, and that point reaches the agent.
+
+Two things had to move into the database for that to work:
+
+1. **The graph and the walk** — so a search is an event several people watch happen,
+   not a function that returns a set.
+2. **The agent's attention** — so exploration is shared state rather than a log
+   nobody reads.
 
 ```mermaid
 flowchart TD
@@ -48,7 +56,21 @@ bolted on top — it is the only reason the walk is in a database at all.
 
 ---
 
-## The core loop
+## The agent loop — the core of the product
+
+1. The agent works. A `PostToolUse` hook reports every file it reads or edits to
+   `report_touch`, which resolves the path to graph nodes and marks them explored.
+2. Every connected screen lights those nodes **as it happens**. The rest stays dark.
+3. A human taps a dark region → `request_exploration` writes a row. It goes amber on
+   every screen at once.
+4. The agent's `UserPromptSubmit` hook picks up pending requests and injects them
+   into context. It claims one, spawns a subagent scoped to that region, explores.
+5. That exploration fires the coverage hook again — **the region lights up**, and the
+   request goes green for everyone.
+
+Full detail in [`AGENT-LOOP.md`](AGENT-LOOP.md).
+
+## The walk loop
 
 1. Open a room. Anyone with the link is inside it, no password, no signup.
 2. Click a changed file. The client calls `start_walk(repo_id, origin, k=6)`.
@@ -72,6 +94,9 @@ bolted on top — it is the only reason the walk is in a database at all.
 | exhaustion / bound | `walk.graph_complete`, `walk.done` |
 | the decision | `verdict` reducer logic — Wilson lower bound vs threshold |
 | who's here | `participant` + `identity_connected` / `identity_disconnected` |
+| what the agent explored | `node_cov` / `touch` — written by the agent's hook |
+| the agent itself | `agent_session` — it appears in the room as a participant |
+| a human's correction | `exploration_request`, `pending → claimed → done` |
 
 There is no application server. The client subscribes and calls reducers; the
 Python loader is an importer that runs once per repo.

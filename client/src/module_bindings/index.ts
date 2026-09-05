@@ -34,11 +34,16 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentHeartbeatReducer from "./agent_heartbeat_reducer";
+import ClaimRequestReducer from "./claim_request_reducer";
+import CompleteRequestReducer from "./complete_request_reducer";
 import CreateRepoReducer from "./create_repo_reducer";
 import FinishRepoReducer from "./finish_repo_reducer";
 import IngestEdgesReducer from "./ingest_edges_reducer";
 import IngestNodesReducer from "./ingest_nodes_reducer";
 import JoinRoomReducer from "./join_room_reducer";
+import ReportTouchReducer from "./report_touch_reducer";
+import RequestExplorationReducer from "./request_exploration_reducer";
 import SetFocusReducer from "./set_focus_reducer";
 import StartWalkReducer from "./start_walk_reducer";
 import StepWalkReducer from "./step_walk_reducer";
@@ -46,11 +51,15 @@ import StepWalkReducer from "./step_walk_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import AgentSessionRow from "./agent_session_table";
 import EdgeRow from "./edge_table";
+import ExplorationRequestRow from "./exploration_request_table";
 import FrontierRow from "./frontier_table";
 import NodeRow from "./node_table";
+import NodeCovRow from "./node_cov_table";
 import ParticipantRow from "./participant_table";
 import RepoRow from "./repo_table";
+import TouchRow from "./touch_table";
 import VerdictRow from "./verdict_table";
 import WalkRow from "./walk_table";
 
@@ -58,6 +67,20 @@ import WalkRow from "./walk_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  agentSession: __table({
+    name: 'agent_session',
+    indexes: [
+      { accessor: 'id', name: 'agent_session_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'session', name: 'agent_session_session_idx_btree', algorithm: 'btree', columns: [
+        'session',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_session_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AgentSessionRow),
   edge: __table({
     name: 'edge',
     indexes: [
@@ -78,6 +101,23 @@ const tablesSchema = __schema({
       { name: 'edge_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, EdgeRow),
+  explorationRequest: __table({
+    name: 'exploration_request',
+    indexes: [
+      { accessor: 'id', name: 'exploration_request_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'repo_id', name: 'exploration_request_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+      { accessor: 'status', name: 'exploration_request_status_idx_btree', algorithm: 'btree', columns: [
+        'status',
+      ] },
+    ],
+    constraints: [
+      { name: 'exploration_request_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ExplorationRequestRow),
   frontier: __table({
     name: 'frontier',
     indexes: [
@@ -109,6 +149,20 @@ const tablesSchema = __schema({
       { name: 'node_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, NodeRow),
+  nodeCov: __table({
+    name: 'node_cov',
+    indexes: [
+      { accessor: 'node_id', name: 'node_cov_node_id_idx_btree', algorithm: 'btree', columns: [
+        'nodeId',
+      ] },
+      { accessor: 'repo_id', name: 'node_cov_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'node_cov_node_id_key', constraint: 'unique', columns: ['nodeId'] },
+    ],
+  }, NodeCovRow),
   participant: __table({
     name: 'participant',
     indexes: [
@@ -137,6 +191,20 @@ const tablesSchema = __schema({
       { name: 'repo_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, RepoRow),
+  touch: __table({
+    name: 'touch',
+    indexes: [
+      { accessor: 'id', name: 'touch_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'repo_id', name: 'touch_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'touch_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TouchRow),
   verdict: __table({
     name: 'verdict',
     indexes: [
@@ -169,11 +237,16 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("agent_heartbeat", AgentHeartbeatReducer),
+  __reducerSchema("claim_request", ClaimRequestReducer),
+  __reducerSchema("complete_request", CompleteRequestReducer),
   __reducerSchema("create_repo", CreateRepoReducer),
   __reducerSchema("finish_repo", FinishRepoReducer),
   __reducerSchema("ingest_edges", IngestEdgesReducer),
   __reducerSchema("ingest_nodes", IngestNodesReducer),
   __reducerSchema("join_room", JoinRoomReducer),
+  __reducerSchema("report_touch", ReportTouchReducer),
+  __reducerSchema("request_exploration", RequestExplorationReducer),
   __reducerSchema("set_focus", SetFocusReducer),
   __reducerSchema("start_walk", StartWalkReducer),
   __reducerSchema("step_walk", StepWalkReducer),
@@ -183,22 +256,76 @@ const reducersSchema = __reducers(
 const proceduresSchema = __procedures(
 );
 
+type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "tables"> & {
+  tables: typeof tablesSchema.schemaType.tables & {
+    /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
+    readonly "agent_session": Omit<typeof tablesSchema.schemaType.tables["agentSession"], "accessorName"> & { readonly accessorName: "agent_session" };
+    /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
+    readonly "exploration_request": Omit<typeof tablesSchema.schemaType.tables["explorationRequest"], "accessorName"> & { readonly accessorName: "exploration_request" };
+    /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
+    readonly "node_cov": Omit<typeof tablesSchema.schemaType.tables["nodeCov"], "accessorName"> & { readonly accessorName: "node_cov" };
+  };
+};
+
 /** The remote SpacetimeDB module schema, both runtime and type information. */
 const REMOTE_MODULE = {
   versionInfo: {
     cliVersion: "2.10.0" as const,
   },
-  tables: tablesSchema.schemaType.tables,
+  tables: tablesSchema.schemaType.tables as __SchemaWithTableAccessorAliases["tables"],
   reducers: reducersSchema.reducersType.reducers,
   ...proceduresSchema,
 } satisfies __RemoteModule<
-  typeof tablesSchema.schemaType,
+  __SchemaWithTableAccessorAliases,
   typeof reducersSchema.reducersType,
   typeof proceduresSchema
 >;
 
+const tableAccessorAliases = {
+  "agent_session": "agentSession",
+  "exploration_request": "explorationRequest",
+  "node_cov": "nodeCov",
+} as const;
+
+function __withTableAccessorAliases<T extends object>(target: T, freeze = false): T {
+  const out = Object.create(Object.getPrototypeOf(target)) as T & Record<string, unknown>;
+  Object.defineProperties(out, Object.getOwnPropertyDescriptors(target));
+  for (const [deprecatedAccessor, targetAccessor] of Object.entries(tableAccessorAliases)) {
+    if (deprecatedAccessor in out) {
+      continue;
+    }
+    Object.defineProperty(out, deprecatedAccessor, {
+      enumerable: true,
+      configurable: false,
+      get: () => out[targetAccessor],
+    });
+  }
+  return freeze ? Object.freeze(out) : out;
+}
+
+type __DbViewBase = __DbConnectionImpl<typeof REMOTE_MODULE>["db"];
+export type DbView = __DbViewBase & {
+  /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
+  readonly "agent_session": __DbViewBase["agentSession"];
+  /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
+  readonly "exploration_request": __DbViewBase["explorationRequest"];
+  /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
+  readonly "node_cov": __DbViewBase["nodeCov"];
+};
+
+type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
+export type Tables = __TablesBase & {
+  /** @deprecated Use `agentSession` instead. This alias will be removed in the next major version. */
+  readonly "agent_session": __TablesBase["agentSession"];
+  /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
+  readonly "exploration_request": __TablesBase["explorationRequest"];
+  /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
+  readonly "node_cov": __TablesBase["nodeCov"];
+};
+
 /** The tables available in this remote SpacetimeDB module. Each table reference doubles as a query builder. */
-export const tables: __QueryBuilder<typeof tablesSchema.schemaType> = __makeQueryBuilder(tablesSchema.schemaType);
+const tablesBase: __TablesBase = __makeQueryBuilder(tablesSchema.schemaType);
+export const tables: Tables = __withTableAccessorAliases(tablesBase, true) as Tables;
 
 /** The reducers available in this remote SpacetimeDB module. */
 export const reducers = __convertToAccessorMap(reducersSchema.reducersType.reducers);
@@ -207,13 +334,13 @@ export const reducers = __convertToAccessorMap(reducersSchema.reducersType.reduc
 export const procedures = __convertToAccessorMap(proceduresSchema.procedures);
 
 /** The context type returned in callbacks for all possible events. */
-export type EventContext = __EventContextInterface<typeof REMOTE_MODULE>;
+export type EventContext = Omit<__EventContextInterface<typeof REMOTE_MODULE>, "db"> & { db: DbView };
 /** The context type returned in callbacks for reducer events. */
-export type ReducerEventContext = __ReducerEventContextInterface<typeof REMOTE_MODULE>;
+export type ReducerEventContext = Omit<__ReducerEventContextInterface<typeof REMOTE_MODULE>, "db"> & { db: DbView };
 /** The context type returned in callbacks for subscription events. */
-export type SubscriptionEventContext = __SubscriptionEventContextInterface<typeof REMOTE_MODULE>;
+export type SubscriptionEventContext = Omit<__SubscriptionEventContextInterface<typeof REMOTE_MODULE>, "db"> & { db: DbView };
 /** The context type returned in callbacks for error events. */
-export type ErrorContext = __ErrorContextInterface<typeof REMOTE_MODULE>;
+export type ErrorContext = Omit<__ErrorContextInterface<typeof REMOTE_MODULE>, "db"> & { db: DbView };
 /** The subscription handle type to manage active subscriptions created from a {@link SubscriptionBuilder}. */
 export type SubscriptionHandle = __SubscriptionHandleImpl<typeof REMOTE_MODULE>;
 
@@ -225,6 +352,13 @@ export class DbConnectionBuilder extends __DbConnectionBuilder<DbConnection> {}
 
 /** The typed database connection to manage connections to the remote SpacetimeDB instance. This class has type information specific to the generated module. */
 export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
+  declare db: DbView;
+
+  constructor(config: __DbConnectionConfig<typeof REMOTE_MODULE>) {
+    super(config);
+    this.db = __withTableAccessorAliases(this.db) as DbView;
+  }
+
   /** Creates a new {@link DbConnectionBuilder} to configure and connect to the remote SpacetimeDB instance. */
   static builder = (): DbConnectionBuilder => {
     return new DbConnectionBuilder(REMOTE_MODULE, (config: __DbConnectionConfig<typeof REMOTE_MODULE>) => new DbConnection(config));

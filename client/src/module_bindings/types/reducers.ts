@@ -6,20 +6,30 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentHeartbeatReducer from "../agent_heartbeat_reducer";
+import ClaimRequestReducer from "../claim_request_reducer";
+import CompleteRequestReducer from "../complete_request_reducer";
 import CreateRepoReducer from "../create_repo_reducer";
 import FinishRepoReducer from "../finish_repo_reducer";
 import IngestEdgesReducer from "../ingest_edges_reducer";
 import IngestNodesReducer from "../ingest_nodes_reducer";
 import JoinRoomReducer from "../join_room_reducer";
+import ReportTouchReducer from "../report_touch_reducer";
+import RequestExplorationReducer from "../request_exploration_reducer";
 import SetFocusReducer from "../set_focus_reducer";
 import StartWalkReducer from "../start_walk_reducer";
 import StepWalkReducer from "../step_walk_reducer";
 
+export type AgentHeartbeatParams = __Infer<typeof AgentHeartbeatReducer>;
+export type ClaimRequestParams = __Infer<typeof ClaimRequestReducer>;
+export type CompleteRequestParams = __Infer<typeof CompleteRequestReducer>;
 export type CreateRepoParams = __Infer<typeof CreateRepoReducer>;
 export type FinishRepoParams = __Infer<typeof FinishRepoReducer>;
 export type IngestEdgesParams = __Infer<typeof IngestEdgesReducer>;
 export type IngestNodesParams = __Infer<typeof IngestNodesReducer>;
 export type JoinRoomParams = __Infer<typeof JoinRoomReducer>;
+export type ReportTouchParams = __Infer<typeof ReportTouchReducer>;
+export type RequestExplorationParams = __Infer<typeof RequestExplorationReducer>;
 export type SetFocusParams = __Infer<typeof SetFocusReducer>;
 export type StartWalkParams = __Infer<typeof StartWalkReducer>;
 export type StepWalkParams = __Infer<typeof StepWalkReducer>;

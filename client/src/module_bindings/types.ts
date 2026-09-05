@@ -10,6 +10,18 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const AgentSession = __t.object("AgentSession", {
+  id: __t.u64(),
+  session: __t.string(),
+  agentName: __t.string(),
+  repoId: __t.u64(),
+  online: __t.bool(),
+  touches: __t.u32(),
+  startedAt: __t.timestamp(),
+  lastAt: __t.timestamp(),
+});
+export type AgentSession = __Infer<typeof AgentSession>;
+
 export const Edge = __t.object("Edge", {
   id: __t.u64(),
   repoId: __t.u64(),
@@ -18,6 +30,20 @@ export const Edge = __t.object("Edge", {
   kind: __t.string(),
 });
 export type Edge = __Infer<typeof Edge>;
+
+export const ExplorationRequest = __t.object("ExplorationRequest", {
+  id: __t.u64(),
+  repoId: __t.u64(),
+  nodeId: __t.u64(),
+  path: __t.string(),
+  note: __t.string(),
+  status: __t.string(),
+  askedBy: __t.identity(),
+  claimedBy: __t.string(),
+  result: __t.string(),
+  at: __t.timestamp(),
+});
+export type ExplorationRequest = __Infer<typeof ExplorationRequest>;
 
 export const Frontier = __t.object("Frontier", {
   id: __t.u64(),
@@ -37,6 +63,17 @@ export const Node = __t.object("Node", {
 });
 export type Node = __Infer<typeof Node>;
 
+export const NodeCov = __t.object("NodeCov", {
+  nodeId: __t.u64(),
+  repoId: __t.u64(),
+  touches: __t.u32(),
+  lastTool: __t.string(),
+  lastSession: __t.string(),
+  explored: __t.bool(),
+  lastAt: __t.timestamp(),
+});
+export type NodeCov = __Infer<typeof NodeCov>;
+
 export const Participant = __t.object("Participant", {
   identity: __t.identity(),
   name: __t.string(),
@@ -45,6 +82,13 @@ export const Participant = __t.object("Participant", {
   online: __t.bool(),
 });
 export type Participant = __Infer<typeof Participant>;
+
+export const PathCache = __t.object("PathCache", {
+  key: __t.string(),
+  repoId: __t.u64(),
+  nodeIds: __t.array(__t.u64()),
+});
+export type PathCache = __Infer<typeof PathCache>;
 
 export const Repo = __t.object("Repo", {
   id: __t.u64(),
@@ -56,6 +100,18 @@ export const Repo = __t.object("Repo", {
   status: __t.string(),
 });
 export type Repo = __Infer<typeof Repo>;
+
+export const Touch = __t.object("Touch", {
+  id: __t.u64(),
+  repoId: __t.u64(),
+  nodeId: __t.u64(),
+  path: __t.string(),
+  tool: __t.string(),
+  session: __t.string(),
+  agentName: __t.string(),
+  at: __t.timestamp(),
+});
+export type Touch = __Infer<typeof Touch>;
 
 export const Verdict = __t.object("Verdict", {
   id: __t.u64(),

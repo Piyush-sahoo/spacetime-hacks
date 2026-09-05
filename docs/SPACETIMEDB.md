@@ -72,7 +72,30 @@ those rows and the UI repaints.
 
 The verdict lands the same way — one row insert, N screens.
 
-## 4. Presence is native
+## 4. The agent writes to the same tables you read
+
+This is the part that makes it a loop rather than a dashboard.
+
+```
+node_cov              what the agent has explored
+touch                 every individual file it opened
+agent_session         the agent, present in the room
+exploration_request   a human pointing at a dark region
+```
+
+A `PostToolUse` hook in the agent's editor calls `report_touch` after every file
+operation. A human clicks a dark node and calls `request_exploration`. **Neither side
+knows the other exists** — they are both just clients of `map-room`, and the database
+does the delivery.
+
+The agent even appears in the presence rail, because `agent_session` is read the same
+way `participant` is. It is in the room with you.
+
+One honest constraint: an agent is turn-based and **cannot hold a subscription**, so
+the human → agent direction is a pull at turn boundaries via a `UserPromptSubmit`
+hook. The agent → human direction is a true push.
+
+## 5. Presence is native
 
 ```
 participant   identity · name · repo_id · focus_node · online
@@ -85,7 +108,7 @@ no timeout sweeper, and no presence service.
 `ctx.sender` gives the caller's identity inside every reducer, so `set_focus` knows
 whose focus to update without the client asserting who it is.
 
-## 5. Loading over the HTTP API
+## 6. Loading over the HTTP API
 
 The Python loader never opens a socket or learns a wire format. It POSTs:
 
@@ -105,7 +128,7 @@ POST /v1/database/map-room/sql
 SELECT id FROM repo WHERE slug = 'django__django-11292'
 ```
 
-## 6. Introspection without bindings
+## 7. Introspection without bindings
 
 Any client can read a module's shape at runtime:
 
@@ -128,8 +151,8 @@ what makes a universal inspector possible at all.
 
 | SpacetimeDB feature | Used for |
 |---|---|
-| Tables as primary state | the call graph, walks, frontier, verdicts, presence |
-| Reducers | the bounded backwards BFS; the verdict; ingest |
+| Tables as primary state | the call graph, walks, frontier, verdicts, presence, **agent coverage**, **exploration requests** |
+| Reducers | the bounded backwards BFS; the verdict; ingest; **`report_touch` path resolution** |
 | Transactions | one hop = one atomic state change every client sees identically |
 | btree indexes | `edge.dst` for the walk; `frontier.walk_id` for the paint |
 | Subscriptions | the entire UI — no polling anywhere |
@@ -163,9 +186,14 @@ The module *is* all of that.
 
 Not "would be harder without" — **cannot exist**.
 
-The product is several people watching one graph being traversed at the same
-moment. The unit of value is the *shared* observation: you and your teammate seeing
-the frontier stop short of the same test, at the same time, and arguing about it.
+The product is several people **and an AI agent** watching one map at the same
+moment. The unit of value is the shared observation and the shared correction: you
+see the agent's attention spread, you see where it stopped, you point — and it goes.
+
+Strip the database out and ask what remains. The agent could log to a file; you could
+read the file; you could message the agent. All of that exists already and none of it
+is this product, because the value is the **simultaneity** — light spreading while
+several people watch, and a tap everyone sees land.
 
 A single-player version of this is a static picture. It's already been published as
 a number in a table, and nobody looked. The thing that makes it land is watching it
