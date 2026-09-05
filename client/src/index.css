@@ -130,16 +130,26 @@ mark { background: var(--hi-bg); color: var(--hi-fg); padding: 0 3px; }
   border-bottom: 1.5px solid var(--ink);
   overflow: hidden;
 }
-#stats { display: flex; min-width: 0; flex: 1; overflow: hidden; }
+#stats { display: flex; min-width: 0; flex: 1; overflow-x: auto; scrollbar-width: none; }
+#stats::-webkit-scrollbar { display: none; }
+/* A stat block keeps its natural width and never compresses into its neighbour;
+   the strip is read from the back of a room and half a clipped word is worse
+   than a stat you scroll to. Below a laptop's width the two facts that are
+   recoverable elsewhere — the step count is on the rail, the session is in the
+   URL — step aside so the ones that are not stay whole. */
+.stat { flex: 0 0 auto; }
+@media (max-width: 1400px) { .stat.opt { display: none; } }
+@media (max-width: 1250px) { .stat.opt2 { display: none; } }
 .stat {
   padding: 6px 14px 4px;
   border-right: 1.5px solid var(--ink);
   min-width: 0;
   white-space: nowrap;
 }
-.stat .k { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+.stat .k { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.stat.grow .k { letter-spacing: .08em; }
 .stat .v { font-size: 15px; font-variant-numeric: tabular-nums; }
-.stat.grow { flex: 1; border-right: none; overflow: hidden; }
+.stat.grow { flex: 1 0 auto; border-right: none; }
 .stat .v .dim { color: var(--ink-2); }
 
 #controls {

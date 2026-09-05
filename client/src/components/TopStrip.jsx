@@ -24,8 +24,8 @@ export default function TopStrip({
     ? String(sessionFilter).slice(0, 8)
     : (timeline.length ? String(timeline[timeline.length - 1].sessionKey).split('/')[0].slice(0, 8) : '—')
 
-  const stat = (k, v, grow) => (
-    <div className={`stat${grow ? ' grow' : ''}`} key={k}>
+  const stat = (k, v, grow, opt) => (
+    <div className={`stat${grow ? ' grow' : ''}${opt ? ` ${opt}` : ''}`} key={k} title={typeof k === 'string' ? k : undefined}>
       <div className="k">{k}</div>
       <div className="v">{v}</div>
     </div>
@@ -37,11 +37,15 @@ export default function TopStrip({
     <div id="top">
       <div id="stats">
         {stat('Repo', repo?.slug || '—')}
-        {stat('Session', sessionFilter ? sess : `${sess} · all`)}
+        {stat('Session', sessionFilter ? sess : `${sess} · all`, false, 'opt2')}
         {stat('Explored', <span>{coverage.exploredFiles}<span className="dim"> / {coverage.totalFiles}</span></span>)}
         {stat('Agents', live.length ? `${mains} + ${subs} sub` : 'none connected')}
-        {stat('Step', cursor == null ? `${steps} live` : `${cursor} / ${steps}`)}
-        {stat('Asked', `${open} open · ${claimed} live · ${done} done`, true)}
+        {stat('Step', cursor == null ? `${steps} live` : `${cursor} / ${steps}`, false, 'opt')}
+        {/* Three numbers, not three sentences: the strip has to survive next to
+            the controls at 1440 without the last stat clipping mid-word. */}
+        {stat('Asked / live / done', (
+          <span>{open}<span className="dim"> / </span>{claimed}<span className="dim"> / </span>{done}</span>
+        ), true)}
         {stat('Feed', <span className={meta.status === 'connected' ? 'blip' : ''}>{conn}</span>)}
       </div>
       <div id="controls">
