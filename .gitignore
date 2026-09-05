@@ -6,4 +6,3 @@ dist/
 .DS_Store
 *.egg-info/
 .pytest_cache/
-client/src/module_bindings/
