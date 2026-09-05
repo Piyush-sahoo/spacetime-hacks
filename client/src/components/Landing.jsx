@@ -43,8 +43,8 @@ export default function Landing({ onEnter }) {
           </h1>
 
           <p className="mt-6 text-[15.5px] sm:text-[17px] max-w-xl leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
-            The tree is your repo. The filaments are calls that ignore the folders.
-            Dark means nobody looked. Tap a dark region, and the agent goes there —
+            Every circle is a file in your repo, every arrow a real edge between them.
+            Dark means nobody looked. Click a dark circle, and the agent goes there —
             on every screen in the room, at once.
           </p>
 
@@ -76,7 +76,7 @@ export default function Landing({ onEnter }) {
             <p className="text-[13.5px] mt-1 flex items-start gap-2" style={{ color: 'var(--ink-soft)' }}>
               <Users size={14} className="mt-[3px] shrink-0" style={{ color: 'var(--accent)' }} />
               <span>
-                The survey lights as the agent works. <strong style={{ fontWeight: 600 }}>A second tab that clicked nothing sees the identical map.</strong>
+                The graph lights as the agent works. <strong style={{ fontWeight: 600 }}>A second tab that clicked nothing sees the identical map.</strong>
               </span>
             </p>
           </div>

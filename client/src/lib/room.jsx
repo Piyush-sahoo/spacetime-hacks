@@ -236,6 +236,9 @@ export function RoomProvider({ children }) {
   // Geography is a pure function of the graph. Recompute only when the graph
   // itself changes — never on a coverage tick, or the ground would move.
   const edgeN = store.count('edge')
+  // The edge rows, with an identity that changes ONLY when the graph does.
+  // The node-link layout memoises on this, so a coverage tick cannot reflow it.
+  const edges = useMemo(() => store.rows('edge'), [edgeN]) // eslint-disable-line
   const geography = useMemo(() => {
     if (!territory.files.length) return null
     return buildGeography(territory, store.rows('edge'))
@@ -516,7 +519,7 @@ export function RoomProvider({ children }) {
   }, [shouldDrive, walk?.id]) // eslint-disable-line
 
   const value = {
-    store, meta, subReady, repo, repos, participants, nodes,
+    store, meta, subReady, repo, repos, participants, nodes, edges,
     walk, frontier, verdict, nodeById, myName,
     callerCount, bestOrigin, walkDone,
     join, startWalk, useMock, retry: connect,

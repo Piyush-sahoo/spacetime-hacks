@@ -9,16 +9,17 @@ import Verdict from './Verdict.jsx'
 import PriorNote from './PriorNote.jsx'
 import CoverageStrip from './CoverageStrip.jsx'
 import RequestPanel from './RequestPanel.jsx'
-import Survey from './Survey.jsx'
+import Graph from './Graph.jsx'
 import TouchTicker from './TouchTicker.jsx'
 import { key } from '../lib/util'
 
 /**
  * Two views over one room.
  *
- * THE SURVEY is the map and the default: the radial tree of the repo with the
- * call graph drawn through it as roots, painted live from the subscription.
- * IMPACT is the hop-by-hop walk, one click away. Same repo, same participants.
+ * THE GRAPH is the map and the default: the repo drawn as a layered node-link
+ * diagram — circles for code, arrows for the edges between them, ranks running
+ * left to right — painted live from the subscription. IMPACT is the hop-by-hop
+ * walk, one click away. Same repo, same participants.
  */
 export default function Room({ onLeave }) {
   const { repo, meta, walk, walkDone, isMock, retry, participants, coverage, requests } = useRoom()
@@ -112,7 +113,7 @@ export default function Room({ onLeave }) {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 p-1 rounded-full w-fit" style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.5)' }}>
                 <Tab active={view === 'coverage'} onClick={() => setView('coverage')} icon={Compass}>
-                  Survey
+                  The graph
                   {openAsks > 0 && <Badge n={openAsks} />}
                 </Tab>
                 <Tab active={view === 'impact'} onClick={() => setView('impact')} icon={GitBranch}>
@@ -120,22 +121,20 @@ export default function Room({ onLeave }) {
                 </Tab>
               </div>
               <span className="micro-label hidden sm:inline">
-                RADIAL SURVEY · EQUAL-AREA SECTORS · CALL GRAPH BUNDLED
+                LAYERED NODE-LINK · RANKS LEFT TO RIGHT · ARROWS ARE REAL EDGES
               </span>
             </div>
 
             {view === 'coverage' ? (
               <div className="space-y-4">
-                <div className="grid gap-4 lg:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] items-start [&>*]:min-w-0">
-                  <Survey />
-                  <div className="space-y-4">
-                    <RequestPanel />
-                    <p className="micro-label px-1">
-                      {coverage.exploredFiles === 0
-                        ? 'NOTHING TOUCHED YET — EVERY FILE IN THIS REPO IS A BLIND SPOT'
-                        : `${coverage.totalFiles - coverage.exploredFiles} FILES THE AGENT HAS NEVER OPENED`}
-                    </p>
-                  </div>
+                <Graph />
+                <div className="grid gap-4 lg:gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] items-start [&>*]:min-w-0">
+                  <p className="micro-label px-1">
+                    {coverage.exploredFiles === 0
+                      ? 'NOTHING TOUCHED YET — EVERY FILE IN THIS REPO IS A BLIND SPOT'
+                      : `${coverage.totalFiles - coverage.exploredFiles} FILES THE AGENT HAS NEVER OPENED`}
+                  </p>
+                  <RequestPanel />
                 </div>
                 {walkDone && <Verdict />}
               </div>
