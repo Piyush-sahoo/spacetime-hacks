@@ -77,9 +77,16 @@ export default function Room({ onLeave }) {
   }, [])
 
   const drill = useCallback((name) => {
+    // Going INTO a directory is the ask to see inside it, so a collapsed one
+    // opens on the way in. Without this the scene is 31 references to the one
+    // block standing for them all.
+    if (name && atlas.byDistrict.has(name)) {
+      const d = atlas.districts[atlas.byDistrict.get(name)]
+      if (d && d.collapsed) toggleDistrict(name)
+    }
     setScope(name)
     setSelected(null)
-  }, [])
+  }, [atlas, toggleDistrict])
 
   // Flying to a district is the index's whole job at 2,975 files.
   useEffect(() => {

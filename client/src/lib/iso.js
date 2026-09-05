@@ -309,8 +309,13 @@ export function buildAtlas(files, opts) {
         short: `${d.files.length} generated`,
         path: d.name,
       }
+      // byFile holds an INDEX into `blocks`, not the block — every consumer
+      // does `blocks[byFile.get(fi)]`. Storing the object here made that
+      // `blocks[{...}]`, so drilling into a collapsed district rendered a scene
+      // of `undefined` and the plate went blank.
+      const at = blocks.length
       blocks.push(b)
-      for (const fi of d.files) byFile.set(fi, b)
+      for (const fi of d.files) byFile.set(fi, at)
       continue
     }
     d.files.forEach((fi, i) => {
