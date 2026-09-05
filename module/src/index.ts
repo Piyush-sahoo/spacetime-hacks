@@ -6,6 +6,7 @@
  */
 import { schema, table, t } from 'spacetimedb/server';
 import type { ReducerCtx } from 'spacetimedb/server';
+import { TimeDuration } from 'spacetimedb';
 
 // ---------------------------------------------------------------- constants
 
@@ -1801,12 +1802,22 @@ export const summarizeRegion = spacetimedb.procedure(
 //
 //   PROSE comes from the model, because a sentence cannot corrupt a graph.
 
-/** The cheap, fast, non-reasoning tier -- lowest latency for a batched call.
- *  Verified from https://developers.openai.com/api/docs/models/gpt-4.1-nano
- *  ("fastest and most cost-efficient version of GPT-4.1 ... without a
- *  reasoning step"), fetched via ctx7, not recalled. */
-const OPENAI_MODEL = 'gpt-4.1-nano';
+/** The middle tier of the GPT-5.6 family: "balanced intelligence and cost".
+ *  Ids verified against https://developers.openai.com/api/docs/models via
+ *  ctx7, not recalled -- gpt-5.6-sol (frontier), gpt-5.6-terra (balanced),
+ *  gpt-5.6-luna (high-volume). The bare `gpt-5.6` alias resolves to sol.
+ *
+ *  Terra rather than sol because this call runs INSIDE a procedure, where a
+ *  frontier reasoning step is a timeout risk, and the task -- one sentence and
+ *  a category per file -- is extraction, not multi-step reasoning. Terra rather
+ *  than luna because these sentences are read by people. */
+const OPENAI_MODEL = 'gpt-5.6-terra';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+
+/** ctx.http.fetch defaults to 30s and caps at 180s. A batch on the balanced
+ *  tier can outrun 30s, and losing the batch loses only its prose -- the
+ *  imports and symbol counts are committed before this call is made. */
+const OPENAI_TIMEOUT = TimeDuration.fromMillis(120_000);
 
 /** Files per call. The client drives batches and resumes on `offset`. */
 const MAX_ENRICH_LIMIT = 40;
@@ -2345,6 +2356,11 @@ export const enrichRepo = spacetimedb.procedure(
               json_schema: { name: 'file_facts', strict: true, schema: fileFactsSchema() },
             },
           }),
+          // The default is 30s, which was ample for a non-reasoning tier. Terra
+          // can take longer on a full batch, and a timeout here loses the whole
+          // batch's prose -- the imports and symbol counts are already written
+          // by then, so the map still gains height either way.
+          timeout: OPENAI_TIMEOUT,
         });
       } catch {
         llmRes = null;
