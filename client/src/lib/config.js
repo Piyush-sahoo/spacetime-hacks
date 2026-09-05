@@ -1,7 +1,13 @@
 // Both configurable via env; the defaults are the live deployment.
 export const STDB_URI = import.meta.env.VITE_STDB_URI || 'wss://maincloud.spacetimedb.com'
 export const STDB_MODULE = import.meta.env.VITE_STDB_MODULE || 'map-room'
-export const ROOM_SLUG = import.meta.env.VITE_ROOM_SLUG || 'django__django-11292'
+// A room is one repo. `?repo=<slug>` (or `?repo=<id>`) overrides it per tab,
+// which is how one deployment shows both the 2,272-node survey and the
+// 9,831-node one without a rebuild — and how two tabs can be pointed at the
+// same room deliberately rather than by luck.
+const QS = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+export const ROOM_SLUG =
+  QS?.get('repo') || import.meta.env.VITE_ROOM_SLUG || 'django__django-11292'
 
 // k is fixed by the contract: bounded backwards walk, k = 6.
 export const WALK_K = 6

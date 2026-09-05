@@ -68,6 +68,7 @@ export default function Room({ onLeave }) {
                 : 'LOADING ROOM…'}
             </div>
           </div>
+          <RepoPicker />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -187,5 +188,40 @@ function Badge({ n }) {
     >
       {n}
     </span>
+  )
+}
+
+/**
+ * Which repo this room is a map of.
+ *
+ * A room IS a repo, and every tab in it must agree on which — so switching is a
+ * navigation, not a piece of local state: it writes `?repo=` and reloads. That
+ * also makes the choice shareable, which is how the second tab lands in the
+ * same room as the first.
+ */
+function RepoPicker() {
+  const { repos, repo } = useRoom()
+  const ready = repos.filter((r) => Number(r.nodeCount || 0) > 0)
+  if (ready.length < 2 || !repo) return null
+  return (
+    <label className="hidden md:flex items-center gap-1.5 shrink-0" title="Which repo this room maps">
+      <span className="micro-label">REPO</span>
+      <select
+        className="mono text-[11.5px] rounded-md px-2 py-1 cursor-pointer"
+        style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.6)', color: 'var(--ink)' }}
+        value={String(repo.slug)}
+        onChange={(e) => {
+          const u = new URL(window.location.href)
+          u.searchParams.set('repo', e.target.value)
+          window.location.assign(u.toString())
+        }}
+      >
+        {ready.map((r) => (
+          <option key={String(r.id)} value={String(r.slug)}>
+            {String(r.slug)} · {Number(r.nodeCount).toLocaleString()}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

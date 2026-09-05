@@ -27,6 +27,8 @@ import { key } from '../lib/util'
  */
 
 const IGNITE_MS = 2200
+// Cadence for a repaint whose ONLY reason is an open request's pulse.
+const PULSE_MS = 55
 const TAU = Math.PI * 2
 
 const STATUS = {
@@ -158,6 +160,22 @@ export default function Survey() {
   const [flash, setFlash] = useState(null)
   const [tier, setTier] = useState('districts')
 
+  // ── the wake ──────────────────────────────────────────────────────────────
+  // A map that nobody is touching and that nothing is animating must cost the
+  // machine NOTHING. The draw loop is therefore not a loop: `frame` re-arms
+  // itself only while a tween, an ignition or an open request is still moving,
+  // and otherwise lets the chain end. Anything that changes what the plate
+  // should look like — a subscription row, a pan, a zoom, a hover — calls
+  // `wake()`, which marks the plate dirty and restarts the chain if it stopped.
+  const rafRef = useRef(0)
+  const paintRef = useRef(null)
+  const wake = useCallback(() => {
+    dirty.current = true
+    if (rafRef.current === 0 && paintRef.current) {
+      rafRef.current = requestAnimationFrame(paintRef.current)
+    }
+  }, [])
+
   useEffect(() => {
     reduceMotion.current = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false
   }, [])
@@ -184,7 +202,7 @@ export default function Survey() {
     if (!prev || prev.length !== cur.length) return
     const now = performance.now()
     for (let i = 0; i < cur.length; i += 1) {
-      if (cur[i] > 0 && prev[i] === 0) { ignite.current.set(i, now); dirty.current = true }
+      if (cur[i] > 0 && prev[i] === 0) { ignite.current.set(i, now); wake() }
     }
   }, [coverage])
 
@@ -211,8 +229,8 @@ export default function Survey() {
     } else {
       tween.current = { x0: c.x, y0: c.y, k0: c.k, x1: cx, y1: cy, k1: k, t0: performance.now(), dur: 560 }
     }
-    dirty.current = true
-  }, [clamp])
+    wake()
+  }, [clamp, wake])
 
   const fit = useCallback((W, H, geo, animate) => {
     if (!geo || !W || !H) return
@@ -224,14 +242,14 @@ export default function Survey() {
     const c = cam.current
     const [x, y] = clamp(c.x - dx / c.k, c.y - dy / c.k, c.k)
     c.x = x; c.y = y
-    dirty.current = true
-  }, [clamp])
+    wake()
+  }, [clamp, wake])
 
   useEffect(() => {
     if (geography && box.w && !cam.current.fitted) fit(box.w, box.h, geography, false)
   }, [geography, box, fit])
 
-  useEffect(() => { dirty.current = true }, [box, coverage, requestsByFile, hopByNode, picked])
+  useEffect(() => { wake() }, [box, coverage, requestsByFile, hopByNode, picked, wake])
 
   // A `done` ring is static. Only an open request actually animates, so only an
   // open request earns a repaint every frame.
@@ -264,8 +282,8 @@ export default function Survey() {
     const [nx, ny] = clamp(wx - (sx - box.w / 2) / nk, wy - (sy - box.h / 2) / nk, nk)
     c.x = nx; c.y = ny
     tween.current = null
-    dirty.current = true
-  }, [box, zoomLimits, clamp])
+    wake()
+  }, [box, zoomLimits, clamp, wake])
 
   const zoomCentre = useCallback((factor) => {
     const c = cam.current
@@ -408,7 +426,7 @@ export default function Survey() {
       const same = (hoverRef.current?.fi ?? null) === (next?.fi ?? null)
         && (hoverRef.current?.name ?? null) === (next?.name ?? null)
       hoverRef.current = next
-      if (!same) dirty.current = true
+      if (!same) wake()
       setHover(next)
     }
 
@@ -425,7 +443,7 @@ export default function Survey() {
       dragging.current = false
     }
 
-    const onLeave = () => { hoverRef.current = null; setHover(null); dirty.current = true }
+    const onLeave = () => { hoverRef.current = null; setHover(null); wake() }
 
     const onDbl = (e) => {
       e.preventDefault()
@@ -460,18 +478,26 @@ export default function Survey() {
   }, [hitAt, onFile, zoomAt, flyToDistrict, zoomLimits, goTo, panBy, box])
 
   // ── draw loop ─────────────────────────────────────────────────────────────
-  // Repaint only when something changed or something is still animating. An
-  // idle map costs nothing, which is what leaves the whole frame budget for the
-  // pan when the pan is actually happening.
-  const stats = useRef({ frames: 0, ms: 0, max: 0 })
+  // Not a loop. `frame` re-arms itself only while something is genuinely in
+  // motion; the moment the plate settles the rAF chain ends and the tab goes
+  // quiet. `wake()` starts it again. This matters because the map is the thing
+  // left open on a projector for an hour while an agent works: a survey that
+  // is doing nothing must show up as doing nothing.
+  const stats = useRef({ frames: 0, ms: 0, max: 0, ticks: 0 })
+  const animRef = useRef(false)
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !box.w) return
-    let raf = 0
     const ctx = canvas.getContext('2d', { alpha: false })
     let lastTier = null
+    let lastPulse = 0
+    // Assume an open request is visible until a paint says otherwise, so the
+    // loop always gets at least one frame to find out.
+    animRef.current = openReqs > 0
 
     const frame = (now) => {
+      rafRef.current = 0
+      stats.current.ticks += 1
       const c = cam.current
       const tw = tween.current
       if (tw) {
@@ -487,20 +513,35 @@ export default function Survey() {
 
       let igniting = false
       if (ignite.current.size) {
-        for (const [fi, t0] of ignite.current) if (now - t0 > IGNITE_MS) ignite.current.delete(fi)
+        // An expiring ignition earns one last frame, so the flare is cleared
+        // off the plate rather than frozen at its dimmest.
+        for (const [fi, t0] of ignite.current) {
+          if (now - t0 > IGNITE_MS) { ignite.current.delete(fi); dirty.current = true }
+        }
         igniting = ignite.current.size > 0
       }
-      const pulsing = !reduceMotion.current && openReqs > 0
+      // An open request pulses — but only while its ring is actually on the
+      // plate. `animRef` carries that answer back from the last paint, so a
+      // request left pending overnight stops costing anything the moment you
+      // pull back above the altitude its ring is drawn at.
+      const wantPulse = !reduceMotion.current && openReqs > 0
+      let pulsing = wantPulse && animRef.current
+      // And even when it IS on screen, a pulse does not need 120 repaints a
+      // second: its slowest cycle is ~1.6s, so ~18Hz is indistinguishable and
+      // costs a sixth as much.
+      const pulseDue = pulsing && now - lastPulse >= PULSE_MS
 
-      if (dirty.current || igniting || pulsing) {
+      if (dirty.current || igniting || pulseDue) {
         dirty.current = false
+        if (pulsing) lastPulse = now
         const t0 = performance.now()
-        drawSurvey(ctx, {
+        animRef.current = !!drawSurvey(ctx, {
           geo: geography, box, cam: c, coverage, requestsByFile, hopByNode, maxHop,
           walkActive: !!walk && !walkDone,
           ignite: ignite.current, hover: hoverRef.current, picked, now,
           reduce: reduceMotion.current,
         })
+        pulsing = wantPulse && animRef.current
         const dt = performance.now() - t0
         stats.current.frames += 1
         stats.current.ms += dt
@@ -510,11 +551,35 @@ export default function Survey() {
           if (t !== lastTier) { lastTier = t; setTier(t) }
         }
       }
-      raf = requestAnimationFrame(frame)
+      // Re-arm ONLY while something is still moving. Otherwise the chain ends
+      // here and the next wake() picks it back up.
+      if (tween.current || igniting || pulsing) {
+        rafRef.current = requestAnimationFrame(frame)
+      }
     }
-    raf = requestAnimationFrame(frame)
-    if (typeof window !== 'undefined') window.__survey = { stats: stats.current, cam }
-    return () => cancelAnimationFrame(raf)
+
+    paintRef.current = frame
+    // Anything that re-ran this effect changed what the plate should show.
+    dirty.current = true
+    if (rafRef.current === 0) rafRef.current = requestAnimationFrame(frame)
+    if (typeof window !== 'undefined') {
+      window.__survey = {
+        stats: stats.current, cam,
+        idle: () => rafRef.current === 0,
+        diag: () => ({
+          parked: rafRef.current === 0, animated: animRef.current, openReqs,
+          dirty: dirty.current, tween: !!tween.current, ignite: ignite.current.size,
+          reduce: reduceMotion.current,
+          tier: geography ? lodFor(cam.current.k * geography.RMAX).tier : null,
+          fileDots: geography ? lodFor(cam.current.k * geography.RMAX).fileDots : null,
+        }),
+      }
+    }
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+      paintRef.current = null
+    }
   }, [geography, box, coverage, requestsByFile, openReqs, hopByNode, maxHop, walk, walkDone, picked])
 
   const detail = picked != null ? territory.files[picked] : null
@@ -745,12 +810,17 @@ function drawSurvey(ctx, s) {
   const dpr = window.devicePixelRatio || 1
   const W = box.w
   const H = box.h
-  if (!W || !H) return
+  // Whether this paint put anything MOVING on the plate. An open request only
+  // animates when its ring is actually on screen at this altitude — from
+  // district height the rings are not drawn at all, so a request that has been
+  // pending since yesterday must not hold the frame loop open.
+  let animated = false
+  if (!W || !H) return animated
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.fillStyle = '#0a0908'
   ctx.fillRect(0, 0, W, H)
-  if (!geo) return
+  if (!geo) return animated
 
   const k = c.k
   const pxR = k * geo.RMAX
@@ -984,6 +1054,7 @@ function drawSurvey(ctx, s) {
       if (st) {
         const rr = px(9)
         if (req.status === 'pending') {
+          if (!reduce) animated = true
           const pulse = reduce ? 0.7 : 0.55 + 0.45 * Math.sin(now / 340)
           ctx.setLineDash([px(4), px(3.5)])
           ctx.strokeStyle = rgba(255, 209, 102, 0.35 + 0.6 * pulse)
@@ -992,6 +1063,7 @@ function drawSurvey(ctx, s) {
           ctx.setLineDash([])
         } else if (req.status === 'claimed') {
           // a spinner: an arc chasing its own tail
+          if (!reduce) animated = true
           const a0 = reduce ? 0 : (now / 260) % TAU
           ctx.strokeStyle = 'rgba(53,208,255,0.28)'
           ctx.lineWidth = px(1.4)
@@ -1102,4 +1174,6 @@ function drawSurvey(ctx, s) {
   ctx.fillText('N', W / 2, 13)
   ctx.fillStyle = 'rgba(226,222,212,0.16)'
   ctx.fillRect(W / 2, 20, 1, 9)
+
+  return animated
 }

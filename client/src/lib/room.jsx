@@ -82,6 +82,7 @@ export function RoomProvider({ children }) {
     if (!repos.length) return null
     return (
       repos.find((r) => r.slug === ROOM_SLUG) ||
+      repos.find((r) => key(r.id) === ROOM_SLUG) ||
       repos.find((r) => String(r.slug || '').startsWith(ROOM_SLUG)) ||
       repos.find((r) => r.status === 'ready') ||
       repos[0]
