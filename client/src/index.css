@@ -121,6 +121,22 @@ mark { background: var(--hi-bg); color: var(--hi-fg); padding: 0 3px; }
   grid-template-columns: 232px 1fr 440px;
   min-height: 0;
 }
+/* The index folds away so the plate can have the room. The canvas is the
+   thing being looked at; the directory list is navigation for when it is not. */
+#main.no-index { grid-template-columns: 0 1fr 440px; }
+#main.no-index > #index { display: none; }
+#showIndex {
+  position: absolute; left: 8px; top: 8px; z-index: 5;
+  font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  padding: 6px 9px; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); cursor: pointer;
+}
+#showIndex:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+#index .hide {
+  float: right; font: 500 10px/1 var(--mono); letter-spacing: .1em;
+  color: var(--ink-2); background: none; border: 0; cursor: pointer; padding: 2px 4px;
+}
+#index .hide:hover { color: var(--ink); }
 @media (max-width: 1100px) { #main { grid-template-columns: 200px 1fr 360px; } }
 
 /* ── top strip ───────────────────────────────────────────────────────────── */

@@ -267,6 +267,7 @@ function What({
   const state = lit ? stateOf(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : 'dark'
   const colour = lit ? stateColour(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : null
   const edge = lit ? slotColor(coverage.slot[b.fi]) : null
+  const sym = Number(f.symbols || 0)
 
   return (
     <>
@@ -274,10 +275,26 @@ function What({
       <h1 className="t">{f.label}</h1>
       <p className="sub">{f.path}</p>
 
-      <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+      {/*
+        WHAT IT DOES leads with what the file DOES. Everything under it is
+        provenance — how much of it has been opened and when — which is the
+        answer to a different question and was previously the only answer on
+        offer. The sentence comes from `enrich_repo`; a file that has not been
+        enriched simply has no line here rather than a fabricated one.
+      */}
+      {f.summary && (
+        <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: '0 0 10px' }}>{f.summary}</p>
+      )}
+
+      <p style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+        {/* `symbols` is the regex-measured count of functions and classes.
+            `count` is how many graph nodes the file owns, which for an indexed
+            repo is always 1 — saying "1 of 1 symbol" about a 118-function file
+            was true of the graph and nonsense about the file. */}
+        {sym > 0 && <>{sym} function{sym === 1 ? '' : 's'}{f.loc ? ` · ${f.loc} lines` : ''}. </>}
         {dark
-          ? `${f.count} symbol${f.count === 1 ? '' : 's'} in here and no agent has opened any of them. It is drawn dashed for exactly that reason.`
-          : `${lit} of ${f.count} symbol${f.count === 1 ? '' : 's'} touched, last with ${coverage.tool[b.fi] || 'a tool call'} ${ago(coverage.at[b.fi])} ago.`}
+          ? 'No agent has opened it. That is why it is drawn dashed.'
+          : `Last opened with ${coverage.tool[b.fi] || 'a tool call'} ${ago(coverage.at[b.fi])} ago.`}
       </p>
 
       {!dark && (

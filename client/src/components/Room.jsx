@@ -31,6 +31,8 @@ export default function Room({ onLeave }) {
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('activity')
   const [playing, setPlaying] = useState(true)
+  // The index folds away so the plate can have the room.
+  const [showIndex, setShowIndex] = useState(true)
   // null means LIVE — the map shows everything that has arrived. A number means
   // the timeline is being scrubbed and blocks lit after that step go dark again.
   const [cursor, setCursor] = useState(null)
@@ -161,8 +163,9 @@ export default function Room({ onLeave }) {
         onLeave={onLeave}
       />
 
-      <div id="main">
+      <div id="main" className={showIndex ? undefined : 'no-index'}>
         <LeftIndex
+          onHide={() => setShowIndex(false)}
           scope={scope}
           onScope={(n) => { if (n) drill(n); else { setScope(null); setSelected(null) } }}
           selected={selected}
@@ -170,6 +173,11 @@ export default function Room({ onLeave }) {
         />
 
         <div id="canvasWrap">
+          {!showIndex && (
+            <button id="showIndex" onClick={() => setShowIndex(true)} title="Show the directory index">
+              &#9658; Dirs
+            </button>
+          )}
           <Atlas
             handle={atlasRef}
             scope={scope}

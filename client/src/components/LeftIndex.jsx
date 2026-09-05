@@ -15,7 +15,7 @@ import { stateColour } from '../lib/actors'
  * agent is standing, red where it has been, blue for new ground. The index and
  * the plate must never disagree about what a colour means.
  */
-export default function LeftIndex({ scope, onScope, selected, onSelect }) {
+export default function LeftIndex({ scope, onScope, selected, onSelect, onHide }) {
   const { atlas, districtStats, coverage, now } = useRoom()
   const [q, setQ] = useState('')
 
@@ -30,6 +30,11 @@ export default function LeftIndex({ scope, onScope, selected, onSelect }) {
 
   return (
     <nav id="index" aria-label="Directories">
+      {onHide && (
+        <button className="hide" onClick={onHide} title="Hide the directory index">
+          hide &#9668;
+        </button>
+      )}
       {atlas.districts.length > 12 && (
         <input
           className="filter"

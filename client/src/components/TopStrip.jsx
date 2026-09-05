@@ -36,17 +36,30 @@ export default function TopStrip({
   return (
     <div id="top">
       <div id="stats">
-        {stat('Repo', repo?.slug || '—')}
-        {stat('Session', sessionFilter ? sess : `${sess} · all`, false, 'opt2')}
+        {/*
+          THREE STATS, NOT SEVEN. Where the other four went, since none of it
+          is actually lost:
+
+            SESSION  a hex fragment nobody can read, and it is already in the
+                     URL. What it was really saying — am I scoped to one run —
+                     is now a word beside the repo.
+            STEP     the timeline rail underneath already reads LIVE · N CALLS.
+            ASKED    three numbers for a queue that has its own tab, and the
+                     tab carries the count.
+            FEED     if the numbers are moving the feed is live; if the socket
+                     drops, the legend says so and offers a retry.
+
+          What is left is what reads from the back of a room: which repo, how
+          much of it has been seen, whether anybody is working.
+        */}
+        {stat('Repo', (
+          <span>
+            {repo?.slug || '—'}
+            <span className="dim"> · {sessionFilter ? 'this run' : 'all runs'}</span>
+          </span>
+        ))}
         {stat('Explored', <span>{coverage.exploredFiles}<span className="dim"> / {coverage.totalFiles}</span></span>)}
-        {stat('Agents', live.length ? `${mains} + ${subs} sub` : 'none connected')}
-        {stat('Step', cursor == null ? `${steps} live` : `${cursor} / ${steps}`, false, 'opt')}
-        {/* Three numbers, not three sentences: the strip has to survive next to
-            the controls at 1440 without the last stat clipping mid-word. */}
-        {stat('Asked / live / done', (
-          <span>{open}<span className="dim"> / </span>{claimed}<span className="dim"> / </span>{done}</span>
-        ), true)}
-        {stat('Feed', <span className={meta.status === 'connected' ? 'blip' : ''}>{conn}</span>)}
+        {stat('Agents', live.length ? `${mains} + ${subs} sub` : 'none connected', true)}
       </div>
       <div id="controls">
         <button className="ctl" onClick={onBack} disabled={!canBack} title="Back one tool call">◂ Back</button>
