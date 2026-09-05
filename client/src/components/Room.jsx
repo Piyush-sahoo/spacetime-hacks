@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Copy, ExternalLink, AlertTriangle, Map as MapIcon, GitBranch } from 'lucide-react'
+import { ArrowLeft, Copy, ExternalLink, AlertTriangle, Compass, GitBranch } from 'lucide-react'
 import { useRoom } from '../lib/room.jsx'
 import ConnBadge from './ConnBadge.jsx'
 import PresenceRail from './PresenceRail.jsx'
@@ -7,28 +7,28 @@ import NodeList from './NodeList.jsx'
 import WalkView from './WalkView.jsx'
 import Verdict from './Verdict.jsx'
 import PriorNote from './PriorNote.jsx'
-import CoverageMap from './CoverageMap.jsx'
 import CoverageStrip from './CoverageStrip.jsx'
 import RequestPanel from './RequestPanel.jsx'
+import Survey from './Survey.jsx'
+import TouchTicker from './TouchTicker.jsx'
 import { key } from '../lib/util'
 
 /**
  * Two views over one room.
  *
- * COVERAGE is the default and gets the whole width, because the dark map is
- * the thing the room exists to show. IMPACT is the v1 walk, unchanged and one
- * click away — same repo, same participants, same subscription.
+ * THE SURVEY is the map and the default: the radial tree of the repo with the
+ * call graph drawn through it as roots, painted live from the subscription.
+ * IMPACT is the hop-by-hop walk, one click away. Same repo, same participants.
  */
 export default function Room({ onLeave }) {
-  const { repo, meta, walk, isMock, retry, participants, coverage, requests } = useRoom()
+  const { repo, meta, walk, walkDone, isMock, retry, participants, coverage, requests } = useRoom()
   const [view, setView] = useState('coverage')
   const walkRef = useRef(null)
   const seen = useRef(null)
 
-  // On a NEW walk — whoever started it — switch to the walk and bring the paint
-  // into view. On a phone the list sits above the canvas, so without this the
-  // money shot is offscreen. A walk that was already running when we joined
-  // must NOT hijack the map, hence the first-observation guard.
+  // A walk that starts while we are already in the room stays on the survey
+  // so every tab watches the same paint. A walk that was already running
+  // when we joined must not hijack the map.
   useEffect(() => {
     if (!walk) return
     const id = key(walk.id)
@@ -36,10 +36,7 @@ export default function Room({ onLeave }) {
     const first = seen.current === null
     seen.current = id
     if (first) return
-    setView('impact')
-    if (window.matchMedia('(max-width: 1023px)').matches) {
-      setTimeout(() => walkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
-    }
+    setView('coverage')
   }, [walk?.id]) // eslint-disable-line
 
   const disconnected = meta.status === 'error' || meta.status === 'offline'
@@ -109,28 +106,37 @@ export default function Room({ onLeave }) {
 
           <div className="space-y-4 min-w-0">
             <CoverageStrip />
+            <TouchTicker />
 
-            <div className="flex items-center gap-1.5 p-1 rounded-full w-fit" style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.5)' }}>
-              <Tab active={view === 'coverage'} onClick={() => setView('coverage')} icon={MapIcon}>
-                Coverage map
-                {openAsks > 0 && <Badge n={openAsks} />}
-              </Tab>
-              <Tab active={view === 'impact'} onClick={() => setView('impact')} icon={GitBranch}>
-                Impact walk
-              </Tab>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 p-1 rounded-full w-fit" style={{ border: '1px solid var(--line)', background: 'rgba(250,249,246,0.5)' }}>
+                <Tab active={view === 'coverage'} onClick={() => setView('coverage')} icon={Compass}>
+                  Survey
+                  {openAsks > 0 && <Badge n={openAsks} />}
+                </Tab>
+                <Tab active={view === 'impact'} onClick={() => setView('impact')} icon={GitBranch}>
+                  Impact walk
+                </Tab>
+              </div>
+              <span className="micro-label hidden sm:inline">
+                RADIAL SURVEY · EQUAL-AREA SECTORS · CALL GRAPH BUNDLED
+              </span>
             </div>
 
             {view === 'coverage' ? (
-              <div className="grid gap-4 lg:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
-                <CoverageMap />
-                <div className="space-y-4">
-                  <RequestPanel />
-                  <p className="micro-label px-1">
-                    {coverage.exploredFiles === 0
-                      ? 'NOTHING TOUCHED YET — EVERY FILE IN THIS REPO IS A BLIND SPOT'
-                      : `${coverage.totalFiles - coverage.exploredFiles} FILES THE AGENT HAS NEVER OPENED`}
-                  </p>
+              <div className="space-y-4">
+                <div className="grid gap-4 lg:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
+                  <Survey />
+                  <div className="space-y-4">
+                    <RequestPanel />
+                    <p className="micro-label px-1">
+                      {coverage.exploredFiles === 0
+                        ? 'NOTHING TOUCHED YET — EVERY FILE IN THIS REPO IS A BLIND SPOT'
+                        : `${coverage.totalFiles - coverage.exploredFiles} FILES THE AGENT HAS NEVER OPENED`}
+                    </p>
+                  </div>
                 </div>
+                {walkDone && <Verdict />}
               </div>
             ) : (
               <div className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">

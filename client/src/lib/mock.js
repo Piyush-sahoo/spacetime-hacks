@@ -1,4 +1,5 @@
 import { PRIOR, WALK_K } from './config'
+import { key } from './util'
 
 /**
  * LOCAL MOCK — review-only.
@@ -33,15 +34,34 @@ const FILES = [
   ['django.db.backends.base.operations', ['BaseDatabaseOperations.quote_name']],
 ]
 
+const EXTRA = [
+  ['django.forms.fields', ['CharField.to_python', 'DateTimeField.clean', 'Field.widget_attrs', 'Field.prepare_value']],
+  ['django.forms.widgets', ['Widget.render', 'TextInput.get_context', 'Select.format_value']],
+  ['django.forms.models', ['ModelForm.save', 'modelform_factory']],
+  ['django.core.management.base', ['BaseCommand.handle', 'Command.execute', 'Command.check']],
+  ['django.core.management.commands.runserver', ['Command.handle', 'inner_run']],
+  ['django.contrib.admin.options', ['ModelAdmin.save_model', 'ModelAdmin.changeform_view', 'ModelAdmin.get_queryset']],
+  ['django.contrib.admin.sites', ['AdminSite.register', 'AdminSite.admin_view']],
+  ['django.utils.timezone', ['now', 'make_aware', 'localtime']],
+  ['django.utils.encoding', ['force_str', 'smart_str']],
+  ['django.http.request', ['HttpRequest.get_host', 'HttpRequest.is_secure']],
+  ['django.http.response', ['HttpResponse.__init__', 'JsonResponse.__init__']],
+  ['django.urls.resolvers', ['URLResolver.resolve', 'RegexPattern.match']],
+  ['django.template.base', ['Template.render', 'Variable.resolve']],
+  ['django.views.generic.base', ['View.dispatch', 'View.get']],
+]
+
 const TESTS = [
   ['tests.queries.test_query', ['TestQuery.test_filter_conditional', 'TestQuery.test_multiple_fields']],
   ['tests.expressions.tests', ['BasicExpressionsTests.test_filter_with_join']],
   ['tests.lookup.tests', ['LookupTests.test_exact_query_rhs_with_selected_columns']],
+  ['tests.forms_tests.field_tests.test_datetimefield', ['DateTimeFieldTest.test_datetimefield_1']],
+  ['tests.admin_views.tests', ['AdminViewBasicTest.test_change_save']],
 ]
 
 function buildGraph() {
   const nodes = []
-  const preds = new Map() // node id -> [predecessor ids]
+  const preds = new Map()
   let next = 10000000000n
   const mk = (kind, name, qual) => {
     const id = next
@@ -54,12 +74,15 @@ function buildGraph() {
   for (const [file, syms] of FILES) {
     for (const s of syms) fn.push(mk('Function', s.split('.').pop(), `${file}::${s}`))
   }
+  const extra = []
+  for (const [file, syms] of EXTRA) {
+    for (const s of syms) extra.push(mk('Function', s.split('.').pop(), `${file}::${s}`))
+  }
   const tests = []
   for (const [file, syms] of TESTS) {
     for (const s of syms) tests.push(mk('Test', s.split('.').pop(), `${file}::${s}`))
   }
 
-  // Chain callers backwards: node i is called by a couple of later nodes.
   for (let i = 0; i < fn.length; i++) {
     const p = []
     if (i + 1 < fn.length) p.push(fn[i + 1])
@@ -67,12 +90,32 @@ function buildGraph() {
     if (i + 7 < fn.length) p.push(fn[i + 7])
     preds.set(String(fn[i]), p)
   }
+  // Cross-package filaments so the survey has roads that ignore folders.
+  if (extra[0] && fn[2]) preds.set(String(fn[2]), [...(preds.get(String(fn[2])) || []), extra[0]])
+  if (extra[4] && fn[5]) preds.set(String(fn[5]), [...(preds.get(String(fn[5])) || []), extra[4]])
+  if (extra[8] && extra[1]) preds.set(String(extra[1]), [extra[8], extra[9] || extra[8]])
+  if (extra[12] && extra[3]) preds.set(String(extra[3]), [extra[12]])
+  if (extra[16] && extra[6]) preds.set(String(extra[6]), [extra[16], extra[17] || extra[16]])
+  if (extra[20] && extra[10]) preds.set(String(extra[10]), [extra[20]])
+  if (extra[24] && extra[14]) preds.set(String(extra[14]), [extra[24]])
+  for (let i = 0; i < extra.length - 1; i += 3) {
+    preds.set(String(extra[i]), [...(preds.get(String(extra[i])) || []), extra[i + 1]])
+  }
+
   // Only ONE test is reachable from production code — the rest are the roads
   // the agent can't see. This is the whole point of the demo.
   preds.set(String(fn[fn.length - 1]), [tests[0]])
   for (const t of tests) if (!preds.has(String(t))) preds.set(String(t), [])
 
-  return { nodes, preds, tests, fn }
+  const edges = []
+  let eid = 1n
+  for (const [dst, srcs] of preds) {
+    for (const src of srcs) {
+      edges.push({ id: eid++, repoId: 1n, src, dst: BigInt(dst), kind: 'CALLS' })
+    }
+  }
+
+  return { nodes, preds, tests, fn, extra, edges }
 }
 
 export function connectMock(store) {
@@ -81,6 +124,8 @@ export function connectMock(store) {
   let walkSeq = 1n
   let frontierSeq = 1n
   let verdictSeq = 1n
+  let reqSeq = 1n
+  let touchSeq = 1n
   const timers = new Set()
   const later = (fn, ms) => {
     const t = setTimeout(() => { timers.delete(t); fn() }, ms)
@@ -89,36 +134,52 @@ export function connectMock(store) {
   }
 
   store.clearTables()
-  store.setMeta({ status: 'connected', mode: 'mock', identity: me, error: null })
+  store.setMeta({ status: 'connected', mode: 'mock', identity: me, error: null, tables: ['repo', 'node', 'edge', 'participant', 'walk', 'frontier', 'verdict', 'node_cov', 'touch', 'agent_session', 'exploration_request'] })
 
   const repo = {
     id: 1n,
     slug: 'django (MOCK)',
     label: 'django/django — MOCK DATA, NOT A REAL GRAPH',
     nodeCount: g.nodes.length,
-    edgeCount: g.nodes.length * 3,
+    edgeCount: g.edges.length,
     reachability: 0.419,
     status: 'ready',
   }
 
-  const walkState = new Map() // walk id -> { origin, hop, frontier:Set, seen:Set }
+  const walkState = new Map()
+
+  const seed = () => {
+    store.upsert('repo', repo)
+    for (const n of g.nodes) store.upsert('node', n)
+    for (const e of g.edges) store.upsert('edge', e)
+    store.upsert('participant', {
+      identity: 'mock-peer-1111',
+      name: 'mock-peer (not a real person)',
+      repoId: 1n,
+      focusNode: 0n,
+      online: true,
+    })
+    store.upsert('agent_session', {
+      id: 1n,
+      session: 'mock-agent',
+      agentName: 'mock-agent',
+      repoId: 1n,
+      online: true,
+      touches: 0,
+      startedAt: Date.now() - 4000,
+      lastAt: Date.now() - 4000,
+    })
+  }
 
   const api = {
     mode: 'mock',
+    has: () => true,
+    hasReducer: (n) => n === 'request_exploration' || n === 'start_walk' || n === 'step_walk',
     subscribe(_queries, onApplied) {
       later(() => {
-        store.upsert('repo', repo)
-        for (const n of g.nodes) store.upsert('node', n)
-        // A second participant so the presence rail is not a lonely list.
-        store.upsert('participant', {
-          identity: 'mock-peer-1111',
-          name: 'mock-peer (not a real person)',
-          repoId: 1n,
-          focusNode: 0n,
-          online: true,
-        })
+        seed()
         onApplied?.()
-      }, 260)
+      }, 180)
       return { unsubscribe() {} }
     },
 
@@ -199,12 +260,57 @@ export function connectMock(store) {
               wilsonLb: lb,
               threshold: PRIOR.threshold,
               reason:
-                'recall is not computable on an unlabelled repo; this cites the measured prior across 172 labelled fixes in 7 repos',
+                'recall is not computable on an unlabelled repo; this cites the measured prior across 172 labelled fixes in 7 repos. Measured test->fix recall 0.419 and its one-sided 95% Wilson lower bound 0.358 are both below the 0.95 bar.',
               missedTest: missed,
             })
           }, 260)
         }
       }, 150)
+    },
+
+    requestExploration(repoId, nodeId, note) {
+      const id = reqSeq
+      reqSeq += 1n
+      const path = String(note || '')
+      later(() => {
+        store.upsert('exploration_request', {
+          id, repoId, nodeId, path, note: path,
+          status: 'pending', askedBy: me, claimedBy: '', result: '', at: Date.now(),
+        })
+        later(() => {
+          store.upsert('exploration_request', {
+            id, repoId, nodeId, path, note: path,
+            status: 'claimed', askedBy: me, claimedBy: 'mock-agent', result: '', at: Date.now(),
+          })
+          const origin = g.nodes.find((n) => key(n.id) === key(nodeId))
+          const prefix = origin ? String(origin.qual).split('::')[0] : ''
+          const same = g.nodes.filter((n) => String(n.qual).startsWith(prefix))
+          let lit = 0
+          for (const n of same) {
+            store.upsert('node_cov', {
+              nodeId: n.id, repoId, touches: 1, lastTool: 'Read',
+              lastSession: 'mock-agent', explored: true, lastAt: Date.now(),
+            })
+            store.upsert('touch', {
+              id: touchSeq++, repoId, nodeId: n.id, path,
+              tool: 'Read', session: 'mock-agent', agentName: 'mock-agent', at: Date.now(),
+            })
+            lit += 1
+          }
+          const sess = store.get('agent_session', 1n) || {
+            id: 1n, session: 'mock-agent', agentName: 'mock-agent', repoId, online: true, touches: 0,
+          }
+          store.upsert('agent_session', { ...sess, touches: (sess.touches || 0) + 1, lastAt: Date.now(), online: true })
+          later(() => {
+            store.upsert('exploration_request', {
+              id, repoId, nodeId, path, note: path,
+              status: 'done', askedBy: me, claimedBy: 'mock-agent',
+              result: `looked; ${lit} symbol${lit === 1 ? '' : 's'} read`,
+              at: Date.now(),
+            })
+          }, 900)
+        }, 700)
+      }, 80)
     },
 
     disconnect() {

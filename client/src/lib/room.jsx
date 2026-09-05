@@ -7,6 +7,7 @@ import { connectMock } from './mock'
 import { ROOM_SLUG, WALK_K, STEP_MS, STALL_TAKEOVER_MS } from './config'
 import { key, idHex, cmpBig, asBig, tsMs } from './util'
 import { buildTerritory } from './territory'
+import { buildGeography } from './geo'
 
 // How recently an agent_session must have reported to count as working now.
 const AGENT_LIVE_MS = 120000
@@ -61,7 +62,7 @@ export function RoomProvider({ children }) {
     stage2Ref.current = null
     stage3Ref.current = null
     setSubReady(false)
-    setCovState('absent')
+    setCovState('connecting')
     const api = connectMock(store)
     apiRef.current = api
     api.subscribe([], () => setSubReady(true))
@@ -179,13 +180,30 @@ export function RoomProvider({ children }) {
     }
     let exploredFiles = 0
     for (let i = 0; i < lit.length; i += 1) if (lit[i] > 0) exploredFiles += 1
+    const exploredIds = new Set()
+    for (const c of covRows) {
+      if (c.explored) exploredIds.add(key(c.nodeId))
+    }
     return {
-      lit, at, tool, exploredNodes, exploredFiles,
+      lit, at, tool, exploredNodes, exploredFiles, exploredIds,
       totalNodes: territory.total,
       totalFiles: files.length,
       unresolved: covRows.length - exploredNodes,
     }
   }, [covRows, territory])
+
+  // Geography is a pure function of the graph. Recompute only when the graph
+  // itself changes — never on a coverage tick, or the ground would move.
+  const edgeN = store.count('edge')
+  const geography = useMemo(() => {
+    if (!territory.files.length) return null
+    return buildGeography(territory, store.rows('edge'))
+  }, [territory, edgeN]) // eslint-disable-line
+
+  const touches = useMemo(
+    () => [...store.rows('touch')].sort((a, b) => tsMs(b.at) - tsMs(a.at)).slice(0, 28),
+    [v] // eslint-disable-line
+  )
 
   // ── the return path ───────────────────────────────────────────────────────
   // One request per file region: the newest row wins, so a region that was
@@ -389,7 +407,7 @@ export function RoomProvider({ children }) {
     isMock: meta.mode === 'mock',
     amDriver,
     // v2 — the coverage loop
-    territory, coverage, requests, requestsByFile, agents,
+    territory, geography, coverage, requests, requestsByFile, agents, touches,
     requestExploration, covState, covError,
     canRequest: !!apiRef.current?.hasReducer?.('request_exploration'),
   }

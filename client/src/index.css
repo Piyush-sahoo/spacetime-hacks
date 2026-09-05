@@ -234,3 +234,27 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .cell-bloom, .cell-pending, .cell-claimed, .cell-done, .spin-slow, .req-row { animation: none; }
 }
+
+/* survey canvas sits on void; keep the paper grain off its pixels */
+.panel-dark canvas {
+  display: block;
+}
+
+/* landing: a faint survey plate, like a compass rose under the copy */
+.survey-plate {
+  position: absolute;
+  right: -18%;
+  top: 8%;
+  width: min(720px, 78vw);
+  height: min(720px, 78vw);
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 87, 26, 0.10) 0 2.5%, transparent 2.6% 100%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(22, 20, 19, 0.07) 0 1px, transparent 1px 11%),
+    repeating-conic-gradient(from 0deg, rgba(22, 20, 19, 0.05) 0 1deg, transparent 1deg 30deg);
+  mask-image: radial-gradient(circle at 50% 50%, #000 0 42%, transparent 72%);
+}
+@media (max-width: 720px) {
+  .survey-plate { opacity: 0.28; right: -30%; top: 0; }
+}

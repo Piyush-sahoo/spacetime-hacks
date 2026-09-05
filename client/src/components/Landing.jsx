@@ -30,8 +30,9 @@ export default function Landing({ onEnter }) {
         <ConnBadge />
       </header>
 
-      <main className="flex-1 px-5 sm:px-8 py-10 sm:py-16">
-        <div className="max-w-3xl mx-auto">
+      <main className="flex-1 px-5 sm:px-8 py-10 sm:py-16 relative overflow-hidden">
+        <div className="survey-plate" aria-hidden="true" />
+        <div className="max-w-3xl mx-auto relative">
           <div className="flex items-center gap-2 mb-6">
             <span className="status-dot w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />
             <span className="micro-label" style={{ color: 'var(--ink)' }}>ONE ROOM · EVERY TAB SEES THE SAME WALK</span>
@@ -42,8 +43,9 @@ export default function Landing({ onEnter }) {
           </h1>
 
           <p className="mt-6 text-[15.5px] sm:text-[17px] max-w-xl leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
-            For engineers running AI coding agents — paste your repo and watch, with your team,
-            the map your agent is actually using, and the roads it can&rsquo;t see.
+            The tree is your repo. The filaments are calls that ignore the folders.
+            Dark means nobody looked. Tap a dark region, and the agent goes there —
+            on every screen in the room, at once.
           </p>
 
           {/* ── entry ── */}
@@ -74,8 +76,7 @@ export default function Landing({ onEnter }) {
             <p className="text-[13.5px] mt-1 flex items-start gap-2" style={{ color: 'var(--ink-soft)' }}>
               <Users size={14} className="mt-[3px] shrink-0" style={{ color: 'var(--accent)' }} />
               <span>
-                Click any file in the list — <strong style={{ fontWeight: 600 }}>the walk runs on everyone&rsquo;s screen.</strong>{' '}
-                Open this page in a second tab to see it.
+                The survey lights as the agent works. <strong style={{ fontWeight: 600 }}>A second tab that clicked nothing sees the identical map.</strong>
               </span>
             </p>
           </div>
