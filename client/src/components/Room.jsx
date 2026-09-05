@@ -23,7 +23,7 @@ import HintBar from './HintBar.jsx'
 export default function Room({ onLeave }) {
   const {
     atlas, timeline, coverage, territory, requestsByFile, requestExploration,
-    canRequest, actors, meta, isMock, retry,
+    canRequest, actors, meta, isMock, retry, toggleDistrict,
   } = useRoom()
 
   const atlasRef = useRef(null)
@@ -52,6 +52,9 @@ export default function Room({ onLeave }) {
     if (!id) { setSelected(null); return }
     const b = sceneBlocks.find((x) => x.id === id)
     setSelected({ kind: 'block', id })
+    // A collapsed district is a door, not a file: clicking it opens the
+    // directory rather than selecting or asking about anything inside.
+    if (b && b.collapsed) { toggleDistrict(b.district); return }
     setTab('what')
     if (!b || b.fi === undefined) return
     // A dark block IS the ask. Clicking one puts the region on the queue, and
@@ -61,7 +64,11 @@ export default function Room({ onLeave }) {
     const open = requestsByFile.get(b.fi)
     if (open && open.status !== 'done') return
     requestExploration(territory.files[b.fi].pick, territory.files[b.fi].path)
-  }, [sceneBlocks, canRequest, coverage, requestsByFile, requestExploration, territory])
+  }, [sceneBlocks, canRequest, coverage, requestsByFile, requestExploration, territory, toggleDistrict])
+
+  // Blue only earns a line in the key when there is blue on the map. On a repo
+  // with no new ground, printing it is one more thing to read for nothing.
+  const hasNewGround = useMemo(() => coverage.isNew?.some((v) => v === 1), [coverage])
 
   const pickStep = useCallback((s) => {
     if (!s) return
@@ -196,24 +203,28 @@ export default function Room({ onLeave }) {
           </div>
 
           {/*
-            THE KEY, IN TWO HALVES, BECAUSE THE MAP SAYS TWO THINGS.
+            THE KEY IS THREE THINGS, NOT SIX.
 
-            FILL IS WHEN — green where an agent is standing, fading to red over
-            five minutes, blue for ground that did not exist when the map was
-            cut, nothing at all for a file nobody has opened. Read it from
-            across the room.
+            Fill is the agent's CONTEXT: green for a file it has read and is
+            probably still holding, fading to red as that falls out of the
+            window, nothing at all for a file it never opened. Six labelled
+            states was more than anyone reads while also reading a map, so the
+            fade no longer gets a line of its own (a gradient does not need
+            naming) and "no agent connected" moved to the AGENTS stat, where
+            somebody looking for it would actually look.
 
-            OUTLINE IS WHO — and only agents that are actually reporting are
-            listed here. A legend with nothing in it is the correct drawing of a
-            room with nobody in it, which is why there is no fallback that fills
-            it with agents who left an hour ago.
+            Blue is the exception and earns its line only when there IS new
+            ground; on a repo with none, printing it is noise.
+
+            Outline is WHO, and only agents actually reporting are listed. A
+            legend with nothing in it is the correct drawing of a room with
+            nobody in it.
           */}
           <div id="legend">
-            <span className="lg"><i style={{ background: STATE_LIVE }} />Agent here now</span>
-            <span className="lg"><i className="fade" />Cooling · 30s → 5m</span>
-            <span className="lg"><i style={{ background: STATE_COLD }} />Gone cold</span>
-            <span className="lg"><i style={{ background: STATE_NEW }} />New ground</span>
+            <span className="lg"><i style={{ background: STATE_LIVE }} />Read · in context</span>
+            <span className="lg"><i style={{ background: STATE_COLD }} />Read · out of context</span>
             <span className="lg dead">Dashed · never opened</span>
+            {hasNewGround && <span className="lg"><i style={{ background: STATE_NEW }} />New ground</span>}
             {actors.length > 0 && <span className="lg who">Live right now</span>}
             {actors.map((a) => (
               <span className="lg" key={a.actorId || 'main'}>
@@ -221,7 +232,6 @@ export default function Room({ onLeave }) {
                 {a.actorId ? actorLabel(a.actorId) : (a.name || 'main agent')}
               </span>
             ))}
-            {!actors.length && <span className="lg dead">No agent connected</span>}
             {isMock && <span className="lg dead">Mock fixture</span>}
             {disconnected && (
               <button className="lg" onClick={retry} style={{ cursor: 'pointer' }}>

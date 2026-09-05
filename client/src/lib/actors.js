@@ -147,10 +147,19 @@ export const STATE_COLD = '#ef4444'
 /** Minted after the survey — this ground is new. */
 export const STATE_NEW = '#3b82f6'
 
-/** Full green under this age. */
-export const TOUCH_LIVE_MS = 30000
-/** Fully red past this one. Between the two it fades. */
-export const TOUCH_COLD_MS = 300000
+/**
+ * The clock here is the AGENT'S CONTEXT, not wall time.
+ *
+ * A file read five minutes ago is almost certainly still in the agent's window
+ * and informing what it does next. One read fifteen minutes and a few hundred
+ * tool calls ago has effectively fallen out — the agent is working from a
+ * summary of it at best. That is the distinction worth drawing on a map of an
+ * agent's attention, and it is why green is generous and red arrives late.
+ */
+/** Fully green under this age — read, and still in mind. */
+export const TOUCH_LIVE_MS = 300000
+/** Fully red past this one — read, but out of context. It fades between. */
+export const TOUCH_COLD_MS = 900000
 
 const LIVE_RGB = [34, 197, 94]
 const COLD_RGB = [239, 68, 68]
@@ -196,8 +205,8 @@ export function stateColour(at, isNew, now) {
 /** What the tooltip and the panel call each state. */
 export const STATE_LABEL = {
   dark: 'never opened',
-  live: 'an agent is here now',
-  cooling: 'cooling',
-  cold: 'explored, gone cold',
+  live: 'read, still in context',
+  cooling: 'falling out of context',
+  cold: 'read, out of context',
   new: 'new ground',
 }

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, use
 import { useRoom } from '../lib/room.jsx'
 import { P, pts, boundsOf, gridRange, hopPath, pointAt } from '../lib/iso'
 import { hopsOf } from '../lib/route'
-import { NEUTRAL_SLOT, slotColor, stateColour, stateOf, STATE_LABEL } from '../lib/actors'
+import { NEUTRAL_SLOT, slotColor, stateColour, stateOf, STATE_LABEL, STATE_NEW } from '../lib/actors'
 
 /**
  * THE MAP — a repo as an isometric plate, and an agent's route across it.
@@ -163,7 +163,7 @@ function bodyOf(b, fill, fillOpacity, sw, ghost) {
  * a different element from `.hl`, which is the hover highlight and stays
  * hidden until the pointer is over the block.
  */
-const Block = memo(function Block({ b, lit, colour, edge, sel, fresh }) {
+const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land }) {
   const ghost = !lit
   const sw = sel ? 2 : 1.2
   const fill = ghost ? 'none' : (colour || 'var(--face)')
@@ -195,6 +195,33 @@ const Block = memo(function Block({ b, lit, colour, edge, sel, fresh }) {
         stroke="var(--ink)"
         strokeWidth={sel ? 2.5 : 1.8}
       />
+      {/*
+        NEW GROUND KEEPS ITS OWN MARK. The fill already says blue, but blue on
+        its own would read as "a colour" rather than as "this was not here when
+        the map was drawn". A dashed ring on the ground and a dashed top edge
+        say it is a parcel, not a building — and unlike the ignition halo it
+        does not expire, because being new does not.
+      */}
+      {land && !sel && (
+        <>
+          <polygon
+            points={pts(top)}
+            fill="none"
+            stroke={STATE_NEW}
+            strokeWidth={1.6}
+            strokeDasharray="3 2.5"
+            style={{ pointerEvents: 'none' }}
+          />
+          <polygon
+            points={pts([P(gx - 0.55, gy - 0.55, 0), P(gx + w + 0.55, gy - 0.55, 0), P(gx + w + 0.55, gy + d + 0.55, 0), P(gx - 0.55, gy + d + 0.55, 0)])}
+            fill="none"
+            stroke={STATE_NEW}
+            strokeWidth={1.4}
+            strokeDasharray="4 3"
+            style={{ pointerEvents: 'none' }}
+          />
+        </>
+      )}
       {fresh && !sel && (
         <polygon
           className="halo"
@@ -293,12 +320,22 @@ export default function Atlas({
         level: 'file',
         blocks: d.files.map((fi) => atlas.blocks[atlas.byFile.get(fi)]),
         plates: [d],
+        // THE SIGNATURE THE CAMERA FITS ON. It counts the SURVEY only, so a file
+        // an agent just created appearing in this district does not look like a
+        // new scene and does not trigger a refit — and a refit is a camera move,
+        // which is every block on screen moving at once.
+        sig: `${scope}:${d.base}`,
       }
     }
-    if (atlas.full) return { level: 'file', blocks: atlas.blocks, plates: atlas.districts }
+    if (atlas.full) {
+      return {
+        level: 'file', blocks: atlas.blocks, plates: atlas.districts,
+        sig: `f:${atlas.surveyBlocks}:${atlas.surveyDistricts}`,
+      }
+    }
     // Too many files to draw one block each: the same city at a coarser grain.
     // Same coordinates, so drilling in never teleports anything.
-    return { level: 'district', blocks: atlas.dblocks, plates: [] }
+    return { level: 'district', blocks: atlas.dblocks, plates: [], sig: `d:${atlas.surveyDistricts}` }
   }, [atlas, scope])
 
   /** file index -> the block that stands for it in THIS scene. */
@@ -486,7 +523,7 @@ export default function Atlas({
   }, [])
 
   // Fit once per (scene, box) — never on a coverage tick, or the ground moves.
-  const fitTag = `${scope || ''}|${scene.level}|${scene.blocks.length}|${box.w}x${box.h}`
+  const fitTag = `${scope || ''}|${scene.level}|${scene.sig}|${box.w}x${box.h}`
   const fitted = useRef('')
   useEffect(() => {
     if (!box.w || !scene.blocks.length) return
@@ -881,6 +918,12 @@ export default function Atlas({
         steps: timeline.length,
         hops: drawn.reduce((a, d) => a + d.hops.length, 0),
         wires: wires.current.length,
+        fresh: atlas.fresh,
+        surveyBlocks: atlas.surveyBlocks,
+        // NON-EMPTY MEANS THE PLATE REFLOWED. A district outgrew the third-again
+        // of slack `buildAtlas` reserves for it, so it was re-cut and the pack
+        // moved. Reported, never swallowed.
+        overflowed: atlas.overflowed,
         lit: paint.lit.reduce((a, x) => a + x, 0),
         ticks: stats.current.ticks,
         paints: stats.current.paints,
@@ -982,6 +1025,7 @@ export default function Atlas({
                   edge={paint.lit[i] ? colourOfSlot(paint.slot[i]) : null}
                   sel={selBlock === b.id}
                   fresh={paint.at[i] > 0 && nowMs - paint.at[i] < HALO_MS}
+                  land={!!b.newLand}
                 />
               )
             })}

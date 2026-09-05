@@ -35,6 +35,27 @@ const CELL = 3
 const GAP = 2
 
 /**
+ * RESERVED SLACK — why a file appearing does not move the map.
+ *
+ * A district used to be sized for exactly the files it held, so the first file
+ * an agent created grew its grid, re-cut its plate, and shifted every district
+ * the spiral packer had placed after it. The one thing the map may never do.
+ *
+ * So a district is sized for a third again as many files as the SURVEY put in
+ * it, and new ground is dropped into the cells that reserve left empty. The
+ * sizing reads `base` — the indexed file count, which cannot change while the
+ * room is open — so the whole pack is invariant under anything an agent does.
+ *
+ * A district that outgrows its reserve is re-cut, and that is a real reflow.
+ * It is rare (512 parcels is the module's fuse for a whole repo) and it is
+ * REPORTED rather than hidden: `overflowed` and `window.__atlas.diag()`.
+ */
+const SLACK = 1.35
+
+/** District names that outgrew their reserve on the last cut. Empty is normal. */
+export const overflowed = []
+
+/**
  * Above this many files the city is drawn one block PER DIRECTORY instead of
  * one per file. django/django is 2,974 files in 695 directories: as blocks
  * that is ~30k SVG nodes and a hairball, as districts it is a skyline you can
@@ -55,6 +76,24 @@ export function kindOfDir(dir) {
   if (RE_UI.test(d)) return 'screen'
   return 'box'
 }
+
+/**
+ * Directories whose contents nobody wrote and nobody reads.
+ *
+ * On the demo repo `client/src/module_bindings` is 31 of 70 files — the single
+ * largest district, dead centre, drawn as a dense grid of identical squares. It
+ * is machine-generated SDK glue. Giving it the most real estate on a map of a
+ * codebase is a lie about where the codebase is, so it collapses to one block
+ * that says how many it stands for, and expands on a click.
+ */
+const RE_GENERATED = /(^|\/)(module_bindings|bindings|generated|gen|dist|build|out|target|node_modules|vendor|__pycache__|\.next|coverage)(\/|$)/i
+
+export function isGeneratedDir(dir) {
+  return RE_GENERATED.test(String(dir || ''))
+}
+
+/** Under this, a generated district draws in full — collapsing 3 files hides nothing worth hiding. */
+const COLLAPSE_MIN = 6
 
 /** `client/src/lib/room` -> `client/src/lib`; a bare name -> `/` (repo root). */
 export function dirOf(mod) {
@@ -154,8 +193,9 @@ function spiralPack(rects) {
  * @param files territory.files — [{ mod, path, label, count, tests, pick, ids }]
  * @returns the whole city, cut once, memoised by the caller on `node`.
  */
-export function buildAtlas(files) {
+export function buildAtlas(files, opts) {
   const list = files || []
+  const expanded = (opts && opts.expanded) || new Set()
 
   // Impose an order. Never inherit one.
   const order = list.map((f, i) => i).sort((a, b) => {
@@ -166,30 +206,80 @@ export function buildAtlas(files) {
   // ── districts ──────────────────────────────────────────────────────────
   const dm = new Map()
   for (const fi of order) {
-    const dir = dirOf(list[fi].mod)
+    const f = list[fi]
+    // New land carries its own directory, worked out from the real path rather
+    // than from a dotted qual that has already lost the extension.
+    const dir = f.dir || dirOf(f.mod)
     let d = dm.get(dir)
-    if (!d) { d = { name: dir, files: [], count: 0, symbols: 0 }; dm.set(dir, d) }
-    d.files.push(fi)
+    if (!d) { d = { name: dir, files: [], fresh: [], count: 0, base: 0, symbols: 0 }; dm.set(dir, d) }
+    if (f.newLand) d.fresh.push(fi)
+    else { d.files.push(fi); d.base += 1 }
     d.count += 1
-    d.symbols += sizeOf(list[fi])
+    d.symbols += sizeOf(f)
   }
+  // ORDERED ON THE SURVEY, NEVER ON THE TOTAL. `base` is what the index put in
+  // this district and it does not move while the room is open, so a file
+  // arriving cannot reshuffle the pack. `spiralPack` places rect `i` from rects
+  // `0..i-1` alone, so a wholly new directory — `base === 0`, and therefore last
+  // — is APPENDED and cannot disturb anything already placed either.
   const districts = [...dm.values()].sort(
-    (a, b) => (b.count - a.count) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    (a, b) => (b.base - a.base) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   )
 
+  const byMod = (a, b) => {
+    const A = String(list[a].mod), B = String(list[b].mod)
+    return A < B ? -1 : A > B ? 1 : 0
+  }
+  overflowed.length = 0
   districts.forEach((d, i) => {
     d.code = codeAt(i)
     d.kind = kindOfDir(d.name)
-    d.cols = Math.max(1, Math.ceil(Math.sqrt(d.count)))
-    d.rows = Math.ceil(d.count / d.cols)
+    // A collapsed district occupies one cell and draws one block. It is still a
+    // district — it keeps its plate, its letter and its name — so the left index
+    // and the map agree about what exists.
+    d.collapsed = isGeneratedDir(d.name)
+      && (d.base + d.fresh.length) >= COLLAPSE_MIN
+      && !expanded.has(d.name)
+    if (d.collapsed) {
+      d.cols = 1; d.rows = 1; d.cap = 1
+      d.w = CELL + 1; d.h = CELL + 1
+      d.files.sort(byMod); d.fresh.sort(byMod)
+      d.files = d.files.concat(d.fresh)
+      return
+    }
+    const reserve = Math.max(1, Math.ceil(Math.max(1, d.base) * SLACK))
+    let cols = Math.max(1, Math.ceil(Math.sqrt(reserve)))
+    let rows = Math.ceil(reserve / cols)
+    d.overflow = d.base + d.fresh.length > cols * rows
+    if (d.overflow) {
+      const want = d.base + d.fresh.length
+      cols = Math.max(1, Math.ceil(Math.sqrt(want)))
+      rows = Math.ceil(want / cols)
+      overflowed.push(d.name)
+    }
+    d.cols = cols
+    d.rows = rows
+    d.cap = cols * rows
     d.w = d.cols * CELL + 1
     d.h = d.rows * CELL + 1
-    // Files inside a district read alphabetically, so the streets are an index.
-    d.files.sort((a, b) => {
-      const A = String(list[a].mod), B = String(list[b].mod)
-      return A < B ? -1 : A > B ? 1 : 0
-    })
+    // Files inside a district read alphabetically, so the streets are an index —
+    // the SURVEY does, at least. New ground is APPENDED after it rather than
+    // filed alphabetically into it, because an alphabetical insertion would
+    // shift every block after it by one cell, which is the reflow this whole
+    // arrangement exists to prevent. It reads as new ground anyway: it is blue,
+    // haloed and dashed.
+    d.files.sort(byMod)
+    d.fresh.sort(byMod)
+    d.files = d.files.concat(d.fresh)
   })
+
+  if (overflowed.length && typeof console !== 'undefined' && console.warn) {
+    console.warn(
+      `[atlas] ${overflowed.length} district(s) outgrew their reserved slack and were re-cut, `
+      + `so the plate reflowed: ${overflowed.slice(0, 6).join(', ')}`
+      + `${overflowed.length > 6 ? ` +${overflowed.length - 6} more` : ''}`
+    )
+  }
 
   spiralPack(districts)
 
@@ -197,6 +287,32 @@ export function buildAtlas(files) {
   const blocks = []
   const byFile = new Map()
   for (const d of districts) {
+    if (d.collapsed) {
+      // One block standing for the whole district. `fi` is its first file so a
+      // click still has something to select, and `covers` is every file in it,
+      // so coverage can be rolled up rather than lost.
+      const first = d.files[0]
+      const b = {
+        id: `d${d.code}`,
+        fi: first,
+        collapsed: true,
+        covers: d.files.slice(),
+        district: d.name,
+        code: d.code,
+        gx: d.gx + 1,
+        gy: d.gy + 1,
+        w: BW,
+        d: BW,
+        h: heightOf(Math.max(4, d.files.length)),
+        kind: 'cards',
+        name: d.name,
+        short: `${d.files.length} generated`,
+        path: d.name,
+      }
+      blocks.push(b)
+      for (const fi of d.files) byFile.set(fi, b)
+      continue
+    }
     d.files.forEach((fi, i) => {
       const f = list[fi]
       const col = i % d.cols
@@ -224,6 +340,10 @@ export function buildAtlas(files) {
         loc: Number(f.loc || 0),
         summary: f.summary || '',
         role: f.role || '',
+        // Ground that did not exist when the map was cut. The fill is already
+        // blue (`coverage.isNew`); this is what lets the plate keep drawing it
+        // as NEW rather than as something that was always there.
+        newLand: !!f.newLand,
       }
       byFile.set(fi, blocks.length)
       blocks.push(b)
@@ -251,8 +371,17 @@ export function buildAtlas(files) {
       short: shortLabel(d.name.split('/').pop() || d.name),
       path: d.name,
       count: d.count,
+      newLand: d.base === 0,
     }
   })
+
+  // How much of the plate the SURVEY accounts for. The camera fits on this and
+  // not on `blocks.length`, so a file appearing cannot trigger a refit — a refit
+  // is a camera move, and a camera move is every block on screen moving.
+  let surveyBlocks = 0
+  for (const b of blocks) if (!b.newLand) surveyBlocks += 1
+  let surveyDistricts = 0
+  for (const d of districts) if (d.base > 0) surveyDistricts += 1
 
   return {
     files: list,
@@ -263,6 +392,10 @@ export function buildAtlas(files) {
     byFile,
     byDistrict: new Map(districts.map((d, i) => [d.name, i])),
     full: blocks.length <= FILE_CAP,
+    surveyBlocks,
+    surveyDistricts,
+    fresh: blocks.length - surveyBlocks,
+    overflowed: [...overflowed],
   }
 }
 

@@ -198,6 +198,22 @@ export function RoomProvider({ children }) {
   }, [v]) // eslint-disable-line
   const nodes = nodeSplit.all
 
+  /**
+   * The REAL path behind a minted parcel.
+   *
+   * A qual has already thrown the extension away for anything the module
+   * compiles, so `client/src/components/RightPanel.jsx` comes back as
+   * `client.src.components.RightPanel` and no amount of client-side guessing
+   * recovers the `.jsx`. `new_land.path` is the path the agent actually
+   * touched, and it is the one the map should say out loud.
+   */
+  const landN = store.count('new_land')
+  const landPaths = useMemo(() => {
+    const m = new Map()
+    for (const r of store.rows('new_land')) m.set(key(r.nodeId ?? r.node_id), String(r.path || ''))
+    return m
+  }, [landN]) // eslint-disable-line
+
   // ── coverage: the map ─────────────────────────────────────────────────────
   // The territory is derived from `node` alone, so the geography is fixed the
   // moment the graph loads. Coverage then only ever changes colour — nothing
@@ -213,9 +229,14 @@ export function RoomProvider({ children }) {
   // Enrichment changes HEIGHT and nothing else: districts pack on file count
   // and sort alphabetically, so re-cutting the atlas here cannot move a
   // footprint by a pixel. Coverage is still not an input, and never will be.
+  // NEW LAND IS ADMITTED. It used to be filtered out one line above, which left
+  // `territory.byNode` with no cell for a minted parcel and the blue state with
+  // nothing to stand on. It costs nothing to admit: `buildAtlas` reserves a
+  // district's cells from its SURVEY count, so a file arriving lands in ground
+  // that was already set aside and no footprint on screen moves.
   const territory = useMemo(
-    () => buildTerritory(nodeSplit.base, fileMeta),
-    [nodeSplit.base.length, fileMeta]
+    () => buildTerritory(nodeSplit.all, fileMeta, landPaths),
+    [nodeSplit.all.length, fileMeta, landPaths]
   ) // eslint-disable-line
 
   const covRows = useMemo(() => store.rows('node_cov'), [v]) // eslint-disable-line
@@ -356,7 +377,23 @@ export function RoomProvider({ children }) {
    * the property the whole effect rests on: the ground does not move while the
    * audience is watching it light up.
    */
-  const atlas = useMemo(() => buildAtlas(territory.files), [territory])
+  // Generated directories draw as one block until somebody asks to see inside.
+  // `expanded` is view state, not data — it is deliberately NOT in the URL, so
+  // a link never lands somebody in a different-looking map than the one that
+  // was shared.
+  const [expanded, setExpanded] = useState(() => new Set())
+  const toggleDistrict = useCallback((name) => {
+    if (!name) return
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }, [])
+  const atlas = useMemo(
+    () => buildAtlas(territory.files, { expanded }),
+    [territory, expanded]
+  )
 
   // ── the route ─────────────────────────────────────────────────────────────
   // Not a set of lit files: the ORDER an agent walked them in, recovered from
@@ -645,6 +682,7 @@ export function RoomProvider({ children }) {
     territory, coverage, requests, requestsByFile, agents, actors, touches,
     // the atlas
     atlas, routes, timeline, districtStats, liveKeys, liveOfSession,
+    expanded, toggleDistrict,
     // The clock the fade is read against. It advances on the same 10s tick that
     // re-evaluates liveness, so a block cooling from green to red costs one
     // memo per ten seconds and nothing per frame.
