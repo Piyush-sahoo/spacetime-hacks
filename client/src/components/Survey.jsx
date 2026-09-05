@@ -590,6 +590,33 @@ export default function Survey() {
       window.__survey = {
         stats: stats.current, cam,
         idle: () => rafRef.current === 0,
+        // Verification surface. `probe` is the one that matters: it answers
+        // "did the ground move" for a named region, in world AND screen space,
+        // which is the only way to prove new land slotted in without a reflow.
+        probe: (mod) => {
+          if (!geography) return null
+          const i = geography.files.findIndex((f) => f.mod === mod)
+          if (i < 0) return null
+          const f = geography.files[i]
+          const c = cam.current
+          return {
+            mod, fi: i, gx: f.gx, gy: f.gy, ang: f.gang,
+            sx: (f.gx - c.x) * c.k + box.w / 2,
+            sy: (f.gy - c.y) * c.k + box.h / 2,
+            lit: coverage.lit[i], slot: coverage.slot ? coverage.slot[i] : 0,
+            RMAX: geography.RMAX, nFiles: geography.nFiles, nLeaf: geography.nLeaf,
+          }
+        },
+        land: () => ({
+          n: newLand?.n || 0,
+          items: (newLand?.items || []).map((q) => ({
+            path: q.path, x: q.x, y: q.y, district: q.district,
+            slot: coverage.slotByNode?.get(q.nodeId) ?? -1,
+          })),
+        }),
+        who: () => (actors || []).map((a) => ({
+          actor: a.actorId, slot: a.slot, color: a.color, live: a.live, touches: a.touches,
+        })),
         diag: () => ({
           parked: rafRef.current === 0, animated: animRef.current, openReqs,
           dirty: dirty.current, tween: !!tween.current, ignite: ignite.current.size,
