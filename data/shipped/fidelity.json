@@ -1,0 +1,18 @@
+{
+ "spot_check": [
+  {
+   "file": "django/db/models/expressions.py",
+   "aider_defs": 92,
+   "arm_a_defs_matched": 92,
+   "aider_only": [],
+   "coverage_of_aider": 1.0
+  },
+  {
+   "file": "django/core/validators.py",
+   "aider_defs": 27,
+   "arm_a_defs_matched": 27,
+   "aider_only": [],
+   "coverage_of_aider": 1.0
+  }
+ ]
+}

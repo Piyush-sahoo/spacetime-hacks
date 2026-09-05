@@ -1,0 +1,1375 @@
+{
+  "django__django-10097": {
+    "instance_id": "django__django-10097",
+    "repo": "django/django",
+    "graph": "g_b9cf764be62e",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2000013477,
+      2000013476,
+      2000013467,
+      2000013463,
+      2000013464,
+      2000013471,
+      2000013469,
+      2000013470,
+      2000013402,
+      2000013394,
+      2000013391,
+      2000013396,
+      2000013412,
+      2000013553,
+      2000013556,
+      2000013554,
+      2000013551,
+      2000013552,
+      2000013555,
+      2000013550,
+      2000013581,
+      2000013580,
+      2000013582,
+      2000013458,
+      2000013449,
+      2000013450,
+      2000013452,
+      2000013454,
+      2000013455,
+      2000013453,
+      2000013451,
+      2000013400,
+      2000013564,
+      2000013565,
+      2000013395,
+      2000013397,
+      2000013393,
+      2000013392,
+      2000013560,
+      2000013559,
+      2000013561,
+      2000013562,
+      2000013407,
+      2000013408,
+      2000013568,
+      2000013569,
+      2000013436,
+      2000013435,
+      2000013434,
+      2000013432,
+      2000013433,
+      2000013431,
+      2000013430,
+      2000014238,
+      2000023567,
+      2000023569,
+      2000023568,
+      2000027368,
+      2000014313,
+      2000014314,
+      2000014310,
+      2000014312,
+      2000014315,
+      2000014318,
+      2000027212,
+      2000027211,
+      2000027213,
+      2000027210,
+      2000027209,
+      2000013533,
+      2000013532,
+      2000013529,
+      2000013530,
+      2000013535,
+      2000013536,
+      2000013534,
+      2000013531,
+      2000016174,
+      2000016168,
+      2000016178,
+      2000016176,
+      2000016177,
+      2000016167,
+      2000016169,
+      2000016170,
+      2000016172,
+      2000016171,
+      2000016173,
+      2000016175,
+      2000013538,
+      2000021716,
+      2000021714,
+      2000021715,
+      2000021717,
+      2000021708,
+      2000021710,
+      2000021707,
+      2000021718,
+      2000021709,
+      2000021711,
+      2000021712,
+      2000021713,
+      2000013522,
+      2000023894,
+      2000023890,
+      2000023946,
+      2000023943,
+      2000023949,
+      2000013217,
+      2000013218,
+      2000013220,
+      2000013223,
+      2000013224,
+      2000013222,
+      2000014316,
+      2000023924,
+      2000023922,
+      2000023923,
+      2000023920,
+      2000023921,
+      2000023958,
+      2000023959,
+      2000014979,
+      2000014981,
+      2000014980,
+      2000014982,
+      2000014967,
+      2000014966,
+      2000014965,
+      2000014977,
+      2000016311,
+      2000016305,
+      2000016309,
+      2000016307,
+      2000016313,
+      2000016306,
+      2000016308,
+      2000016312,
+      2000016302,
+      2000016304,
+      2000016303,
+      2000016301,
+      2000016310,
+      2000016314,
+      2000023525,
+      2000023550,
+      2000023526,
+      2000023528,
+      2000023529,
+      2000023527,
+      2000023559,
+      2000023530,
+      2000023539,
+      2000023542,
+      2000023546,
+      2000023543,
+      2000023537,
+      2000023561,
+      2000023547,
+      2000023560,
+      2000023534,
+      2000023532,
+      2000020222,
+      2000020223,
+      2000019921,
+      2000014984,
+      2000015865,
+      2000015863,
+      2000015864,
+      2000015866,
+      2000015867,
+      2000013540,
+      2000013544,
+      2000013543,
+      2000013547,
+      2000013541,
+      2000013542,
+      2000013545,
+      2000013546,
+      2000014957,
+      2000014952,
+      2000014953,
+      2000014955,
+      2000014951,
+      2000014954,
+      2000014956,
+      2000015839,
+      2000023883,
+      2000023872,
+      2000023876,
+      2000023880,
+      2000023871,
+      2000023879,
+      2000023873,
+      2000031742,
+      2000031746,
+      2000031751,
+      2000031750,
+      2000031744,
+      2000031749,
+      2000031745,
+      2000031743,
+      2000031748,
+      2000031747,
+      2000015987,
+      2000015989,
+      2000015988,
+      2000015927,
+      2000015929,
+      2000015928,
+      2000015979,
+      2000015980,
+      2000015981,
+      2000015983,
+      2000015982,
+      2000015984,
+      2000015977,
+      2000015978,
+      2000014945,
+      2000014943,
+      2000014942,
+      2000014947,
+      2000014948,
+      2000014949,
+      2000020232,
+      2000020231,
+      2000023829,
+      2000023832,
+      2000023818,
+      2000023823,
+      2000023826,
+      2000015935,
+      2000015932,
+      2000015934,
+      2000015936,
+      2000015933,
+      2000015918,
+      2000015916,
+      2000015919,
+      2000015915,
+      2000015917,
+      2000023684,
+      2000023685,
+      2000023616,
+      2000023628,
+      2000023624,
+      2000023678,
+      2000023722,
+      2000023709,
+      2000023706,
+      2000023712,
+      2000023703,
+      2000023725,
+      2000023719,
+      2000023620,
+      2000023623,
+      2000023619,
+      2000023673,
+      2000023664,
+      2000023670,
+      2000023667,
+      2000023642,
+      2000023639,
+      2000023645,
+      2000023637,
+      2000023687,
+      2000023661,
+      2000023658,
+      2000023634,
+      2000023681,
+      2000023617,
+      2000023700,
+      2000023697,
+      2000023655,
+      2000023715,
+      2000023718,
+      2000023646,
+      2000023649,
+      2000023652,
+      2000023632,
+      2000023633,
+      2000023690,
+      2000023692,
+      2000015993,
+      2000015991,
+      2000015994,
+      2000015992,
+      2000023754,
+      2000023755,
+      2000023752,
+      2000023762,
+      2000023753,
+      2000023748,
+      2000023772,
+      2000023766,
+      2000023769,
+      2000023746,
+      2000023758,
+      2000023759,
+      2000023763,
+      2000023751,
+      2000015939,
+      2000015944,
+      2000015945,
+      2000015947,
+      2000015946,
+      2000015942,
+      2000015943,
+      2000015941,
+      2000015948,
+      2000015940,
+      2000015949,
+      2000015952,
+      2000015953,
+      2000015951,
+      2000015950,
+      2000015954,
+      2000031736,
+      2000031738,
+      2000031739,
+      2000031735,
+      2000031737,
+      2000013578,
+      2000013577,
+      2000013576,
+      2000023778,
+      2000023777,
+      2000023782,
+      2000023792,
+      2000023779,
+      2000023791,
+      2000023780,
+      2000023785,
+      2000023796,
+      2000023795,
+      2000023783,
+      2000023784,
+      2000023786,
+      2000023812,
+      2000023801,
+      2000023808,
+      2000023803,
+      2000023802,
+      2000023804,
+      2000023806,
+      2000023810,
+      2000023814,
+      2000016830,
+      2000016832,
+      2000016834,
+      2000016833,
+      2000020300,
+      2000020301,
+      2000020299,
+      2000020302,
+      2000020308,
+      2000020305,
+      2000020312,
+      2000020306,
+      2000020311,
+      2000020304,
+      2000020307,
+      2000020310,
+      2000020309,
+      2000026288,
+      2000026289,
+      2000028831,
+      2000028815,
+      2000028816,
+      2000028818,
+      2000028817,
+      2000028823,
+      2000028820,
+      2000028825,
+      2000028824,
+      2000028826,
+      2000028828,
+      2000028819,
+      2000028822,
+      2000028814,
+      2000028809,
+      2000028810,
+      2000028811,
+      2000028813,
+      2000028812,
+      2000028827,
+      2000028821
+    ],
+    "repo_loc": 327803,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-10554": {
+    "instance_id": "django__django-10554",
+    "repo": "django/django",
+    "graph": "g_14d026cccb14",
+    "fix_site_ids": [
+      2010007327,
+      2010007466
+    ],
+    "test_target_ids": [
+      2010027887,
+      2010027886
+    ],
+    "repo_loc": 341533,
+    "patch_lines": 11,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-10880": {
+    "instance_id": "django__django-10880",
+    "repo": "django/django",
+    "graph": "g_838e432e3e55",
+    "fix_site_ids": [
+      2020005905
+    ],
+    "test_target_ids": [
+      2020012798
+    ],
+    "repo_loc": 338268,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-10914": {
+    "instance_id": "django__django-10914",
+    "repo": "django/django",
+    "graph": "g_e7fd69d051ea",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2030032429
+    ],
+    "repo_loc": 337329,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-10973": {
+    "instance_id": "django__django-10973",
+    "repo": "django/django",
+    "graph": "g_ddb293685235",
+    "fix_site_ids": [
+      2040005160,
+      2040005162
+    ],
+    "test_target_ids": [
+      2040015931,
+      2040015928,
+      2040015930,
+      2040015929
+    ],
+    "repo_loc": 337390,
+    "patch_lines": 37,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-10999": {
+    "instance_id": "django__django-10999",
+    "repo": "django/django",
+    "graph": "g_36300ef336e3",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2050033344,
+      2050033338
+    ],
+    "repo_loc": 337625,
+    "patch_lines": 7,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11066": {
+    "instance_id": "django__django-11066",
+    "repo": "django/django",
+    "graph": "g_4b45b6c8e4d7",
+    "fix_site_ids": [
+      2060001286
+    ],
+    "test_target_ids": [
+      2060015234
+    ],
+    "repo_loc": 341148,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11087": {
+    "instance_id": "django__django-11087",
+    "repo": "django/django",
+    "graph": "g_8180ffba21bf",
+    "fix_site_ids": [
+      2070006033,
+      2070006035,
+      2070006036,
+      2070006037,
+      2070006038
+    ],
+    "test_target_ids": [
+      2070016311
+    ],
+    "repo_loc": 339674,
+    "patch_lines": 30,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11095": {
+    "instance_id": "django__django-11095",
+    "repo": "django/django",
+    "graph": "g_7d49ad76562e",
+    "fix_site_ids": [
+      2080000428,
+      2080000444
+    ],
+    "test_target_ids": [
+      2080018939
+    ],
+    "repo_loc": 339619,
+    "patch_lines": 6,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11099": {
+    "instance_id": "django__django-11099",
+    "repo": "django/django",
+    "graph": "g_d26b2424437d",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2090013746,
+      2090013745,
+      2090013735
+    ],
+    "repo_loc": 339080,
+    "patch_lines": 4,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11119": {
+    "instance_id": "django__django-11119",
+    "repo": "django/django",
+    "graph": "g_d4df5e1b0b1c",
+    "fix_site_ids": [
+      2100008656
+    ],
+    "test_target_ids": [
+      2100031667
+    ],
+    "repo_loc": 339190,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11133": {
+    "instance_id": "django__django-11133",
+    "repo": "django/django",
+    "graph": "g_879cc3da6249",
+    "fix_site_ids": [
+      2110008193
+    ],
+    "test_target_ids": [
+      2110020559
+    ],
+    "repo_loc": 339318,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11138": {
+    "instance_id": "django__django-11138",
+    "repo": "django/django",
+    "graph": "g_c84b91b7603e",
+    "fix_site_ids": [
+      2120004935,
+      2120005083,
+      2120005084,
+      2120005085,
+      2120005251,
+      2120005267,
+      2120005270,
+      2120005271,
+      2120005272,
+      2120005273,
+      2120005320,
+      2120005321,
+      2120005322,
+      2120005323,
+      2120005324
+    ],
+    "test_target_ids": [
+      2120032732
+    ],
+    "repo_loc": 339535,
+    "patch_lines": 69,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11141": {
+    "instance_id": "django__django-11141",
+    "repo": "django/django",
+    "graph": "g_5d9cf79baf07",
+    "fix_site_ids": [
+      2130005593
+    ],
+    "test_target_ids": [],
+    "repo_loc": 346864,
+    "patch_lines": 10,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11149": {
+    "instance_id": "django__django-11149",
+    "repo": "django/django",
+    "graph": "g_e245046bb6e8",
+    "fix_site_ids": [
+      2140000524,
+      2140000525,
+      2140000526,
+      2140000527
+    ],
+    "test_target_ids": [
+      2140011068,
+      2140011072
+    ],
+    "repo_loc": 339411,
+    "patch_lines": 56,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11163": {
+    "instance_id": "django__django-11163",
+    "repo": "django/django",
+    "graph": "g_e6588aa4e793",
+    "fix_site_ids": [
+      2150007823
+    ],
+    "test_target_ids": [
+      2150024751
+    ],
+    "repo_loc": 339430,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11179": {
+    "instance_id": "django__django-11179",
+    "repo": "django/django",
+    "graph": "g_19fc6376ce67",
+    "fix_site_ids": [
+      2160006038
+    ],
+    "test_target_ids": [
+      2160016313
+    ],
+    "repo_loc": 339570,
+    "patch_lines": 1,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11206": {
+    "instance_id": "django__django-11206",
+    "repo": "django/django",
+    "graph": "g_571ab44e8a89",
+    "fix_site_ids": [
+      2170009869
+    ],
+    "test_target_ids": [
+      2170033907,
+      2170033908
+    ],
+    "repo_loc": 339603,
+    "patch_lines": 8,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11211": {
+    "instance_id": "django__django-11211",
+    "repo": "django/django",
+    "graph": "g_ba726067604c",
+    "fix_site_ids": [
+      2180006490
+    ],
+    "test_target_ids": [
+      2180027260
+    ],
+    "repo_loc": 339617,
+    "patch_lines": 4,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11239": {
+    "instance_id": "django__django-11239",
+    "repo": "django/django",
+    "graph": "g_d87bd29c4f8d",
+    "fix_site_ids": [
+      2190005173,
+      2190005174
+    ],
+    "test_target_ids": [
+      2190016046
+    ],
+    "repo_loc": 339743,
+    "patch_lines": 12,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11265": {
+    "instance_id": "django__django-11265",
+    "repo": "django/django",
+    "graph": "g_21aa2a5e785e",
+    "fix_site_ids": [
+      2200007442,
+      2200007470
+    ],
+    "test_target_ids": [
+      2200017219
+    ],
+    "repo_loc": 340468,
+    "patch_lines": 11,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11276": {
+    "instance_id": "django__django-11276",
+    "repo": "django/django",
+    "graph": "g_28d5262fa331",
+    "fix_site_ids": [
+      2210009769,
+      2210009787,
+      2210009788,
+      2210009790,
+      2210009791
+    ],
+    "test_target_ids": [
+      2210030379,
+      2210013303,
+      2210030622,
+      2210030639,
+      2210030097,
+      2210030524,
+      2210030611,
+      2210030616,
+      2210018651,
+      2210031486,
+      2210024731,
+      2210024732,
+      2210024737,
+      2210024747,
+      2210034235,
+      2210033707,
+      2210033713,
+      2210018040,
+      2210018156,
+      2210010777,
+      2210034284,
+      2210034301
+    ],
+    "repo_loc": 339910,
+    "patch_lines": 26,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11292": {
+    "instance_id": "django__django-11292",
+    "repo": "django/django",
+    "graph": "g_eb16c7260e57",
+    "fix_site_ids": [
+      2220004092,
+      2220004093,
+      2220004096
+    ],
+    "test_target_ids": [
+      2220033351
+    ],
+    "repo_loc": 340002,
+    "patch_lines": 11,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11299": {
+    "instance_id": "django__django-11299",
+    "repo": "django/django",
+    "graph": "g_6866c91b638d",
+    "fix_site_ids": [
+      2230007432
+    ],
+    "test_target_ids": [
+      2230027750
+    ],
+    "repo_loc": 340045,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11333": {
+    "instance_id": "django__django-11333",
+    "repo": "django/django",
+    "graph": "g_55b68de643b5",
+    "fix_site_ids": [
+      2240009339,
+      2240009373
+    ],
+    "test_target_ids": [
+      2240033333
+    ],
+    "repo_loc": 342685,
+    "patch_lines": 10,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11400": {
+    "instance_id": "django__django-11400",
+    "repo": "django/django",
+    "graph": "g_1f8382d34d54",
+    "fix_site_ids": [
+      2250000321,
+      2250000322,
+      2250006384,
+      2250006843,
+      2250006844
+    ],
+    "test_target_ids": [
+      2250024737,
+      2250024739,
+      2250010984
+    ],
+    "repo_loc": 344514,
+    "patch_lines": 26,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11433": {
+    "instance_id": "django__django-11433",
+    "repo": "django/django",
+    "graph": "g_21b1d239125f",
+    "fix_site_ids": [
+      2260007832
+    ],
+    "test_target_ids": [
+      2260024746
+    ],
+    "repo_loc": 341010,
+    "patch_lines": 7,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11451": {
+    "instance_id": "django__django-11451",
+    "repo": "django/django",
+    "graph": "g_e065b293878b",
+    "fix_site_ids": [
+      2270000827
+    ],
+    "test_target_ids": [
+      2270013157,
+      2270013151
+    ],
+    "repo_loc": 341312,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11477": {
+    "instance_id": "django__django-11477",
+    "repo": "django/django",
+    "graph": "g_e28671187903",
+    "fix_site_ids": [
+      2280009381
+    ],
+    "test_target_ids": [
+      2280033312,
+      2280033310,
+      2280020889
+    ],
+    "repo_loc": 342393,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11490": {
+    "instance_id": "django__django-11490",
+    "repo": "django/django",
+    "graph": "g_a7038adbd02c",
+    "fix_site_ids": [
+      2290007331
+    ],
+    "test_target_ids": [
+      2290027883
+    ],
+    "repo_loc": 341509,
+    "patch_lines": 1,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11532": {
+    "instance_id": "django__django-11532",
+    "repo": "django/django",
+    "graph": "g_a5308514fb4b",
+    "fix_site_ids": [
+      2300004058,
+      2300004550,
+      2300004554,
+      2300009724,
+      2300009842,
+      2300009844
+    ],
+    "test_target_ids": [
+      2300022422
+    ],
+    "repo_loc": 342669,
+    "patch_lines": 26,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11551": {
+    "instance_id": "django__django-11551",
+    "repo": "django/django",
+    "graph": "g_7991111af120",
+    "fix_site_ids": [
+      2310000265
+    ],
+    "test_target_ids": [
+      2310025993
+    ],
+    "repo_loc": 343015,
+    "patch_lines": 42,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11555": {
+    "instance_id": "django__django-11555",
+    "repo": "django/django",
+    "graph": "g_8dd5877f58f8",
+    "fix_site_ids": [
+      2320007365
+    ],
+    "test_target_ids": [
+      2320026741
+    ],
+    "repo_loc": 343114,
+    "patch_lines": 3,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11603": {
+    "instance_id": "django__django-11603",
+    "repo": "django/django",
+    "graph": "g_f618e033acd3",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2330012849,
+      2330012831
+    ],
+    "repo_loc": 343825,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11728": {
+    "instance_id": "django__django-11728",
+    "repo": "django/django",
+    "graph": "g_054578176473",
+    "fix_site_ids": [
+      2340000768,
+      2340000769
+    ],
+    "test_target_ids": [
+      2340010924,
+      2340010915
+    ],
+    "repo_loc": 345569,
+    "patch_lines": 22,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11734": {
+    "instance_id": "django__django-11734",
+    "repo": "django/django",
+    "graph": "g_999891bd80b3",
+    "fix_site_ids": [
+      2350006585,
+      2350006586,
+      2350006850,
+      2350007548
+    ],
+    "test_target_ids": [
+      2350028511
+    ],
+    "repo_loc": 345578,
+    "patch_lines": 10,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11740": {
+    "instance_id": "django__django-11740",
+    "repo": "django/django",
+    "graph": "g_003bb34b218a",
+    "fix_site_ids": [
+      2360005515
+    ],
+    "test_target_ids": [
+      2360023564
+    ],
+    "repo_loc": 345642,
+    "patch_lines": 5,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11749": {
+    "instance_id": "django__django-11749",
+    "repo": "django/django",
+    "graph": "g_350123f38c2b",
+    "fix_site_ids": [
+      2370004128
+    ],
+    "test_target_ids": [
+      2370033992
+    ],
+    "repo_loc": 346133,
+    "patch_lines": 10,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11790": {
+    "instance_id": "django__django-11790",
+    "repo": "django/django",
+    "graph": "g_b1d6b35e146a",
+    "fix_site_ids": [
+      2380000916
+    ],
+    "test_target_ids": [
+      2380013527,
+      2380013526
+    ],
+    "repo_loc": 346095,
+    "patch_lines": 4,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11815": {
+    "instance_id": "django__django-11815",
+    "repo": "django/django",
+    "graph": "g_e02f67ef2d03",
+    "fix_site_ids": [
+      2390005880
+    ],
+    "test_target_ids": [
+      2390024430,
+      2390024414
+    ],
+    "repo_loc": 346608,
+    "patch_lines": 7,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11820": {
+    "instance_id": "django__django-11820",
+    "repo": "django/django",
+    "graph": "g_c2678e49759e",
+    "fix_site_ids": [
+      2400006071
+    ],
+    "test_target_ids": [
+      2400021730,
+      2400021737
+    ],
+    "repo_loc": 346576,
+    "patch_lines": 8,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11848": {
+    "instance_id": "django__django-11848",
+    "repo": "django/django",
+    "graph": "g_f0adf3b9b7a1",
+    "fix_site_ids": [
+      2410009938
+    ],
+    "test_target_ids": [
+      2410034483,
+      2410034485
+    ],
+    "repo_loc": 346628,
+    "patch_lines": 10,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11880": {
+    "instance_id": "django__django-11880",
+    "repo": "django/django",
+    "graph": "g_06909fe084f8",
+    "fix_site_ids": [
+      2420007770
+    ],
+    "test_target_ids": [
+      2420018656
+    ],
+    "repo_loc": 346812,
+    "patch_lines": 1,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11885": {
+    "instance_id": "django__django-11885",
+    "repo": "django/django",
+    "graph": "g_04ac9b45a344",
+    "fix_site_ids": [
+      2430000650,
+      2430006119,
+      2430006120,
+      2430006121,
+      2430006123,
+      2430006124,
+      2430006125,
+      2430006126,
+      2430006127,
+      2430006128
+    ],
+    "test_target_ids": [
+      2430016687
+    ],
+    "repo_loc": 346823,
+    "patch_lines": 130,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11951": {
+    "instance_id": "django__django-11951",
+    "repo": "django/django",
+    "graph": "g_312049091288",
+    "fix_site_ids": [
+      2440007332
+    ],
+    "test_target_ids": [
+      2440014723
+    ],
+    "repo_loc": 347392,
+    "patch_lines": 3,
+    "failed": {
+      "20240402_sweagent_gpt4": false,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-11964": {
+    "instance_id": "django__django-11964",
+    "repo": "django/django",
+    "graph": "g_fc2b1cc926e3",
+    "fix_site_ids": [],
+    "test_target_ids": [
+      2450024541,
+      2450024531
+    ],
+    "repo_loc": 347649,
+    "patch_lines": 8,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-11999": {
+    "instance_id": "django__django-11999",
+    "repo": "django/django",
+    "graph": "g_84633905273f",
+    "fix_site_ids": [
+      2460006410,
+      2460006411
+    ],
+    "test_target_ids": [
+      2460024978
+    ],
+    "repo_loc": 347982,
+    "patch_lines": 8,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-12039": {
+    "instance_id": "django__django-12039",
+    "repo": "django/django",
+    "graph": "g_58c1acb1d605",
+    "fix_site_ids": [
+      2470004906,
+      2470004907,
+      2470004913
+    ],
+    "test_target_ids": [
+      2470021507
+    ],
+    "repo_loc": 348370,
+    "patch_lines": 12,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  },
+  "django__django-12050": {
+    "instance_id": "django__django-12050",
+    "repo": "django/django",
+    "graph": "g_b93a0e34d9b9",
+    "fix_site_ids": [
+      2480007566
+    ],
+    "test_target_ids": [
+      2480028523
+    ],
+    "repo_loc": 348444,
+    "patch_lines": 19,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": false,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": false
+    }
+  },
+  "django__django-12125": {
+    "instance_id": "django__django-12125",
+    "repo": "django/django",
+    "graph": "g_89d41cba392b",
+    "fix_site_ids": [
+      2490005932
+    ],
+    "test_target_ids": [
+      2490024577,
+      2490024565
+    ],
+    "repo_loc": 349139,
+    "patch_lines": 2,
+    "failed": {
+      "20240402_sweagent_gpt4": true,
+      "20240620_sweagent_claude3.5sonnet": true,
+      "20241029_OpenHands-CodeAct-2.1-sonnet-20241022": true
+    }
+  }
+}

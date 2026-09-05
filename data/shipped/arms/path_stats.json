@@ -1,0 +1,850 @@
+{
+  "summary": {
+    "n_instances_loaded": 50,
+    "n_instances_total": 50,
+    "n_comparable": 28,
+    "n_excluded_noncomparable": 22,
+    "max_len": 6,
+    "load_ceiling_note": "local backend holds ~13 instances (26 arms) per ~3GB store generation; cohort assembled by batched load+measure across wiped generations, each kept under 3GB",
+    "arm_a": {
+      "instances": 28,
+      "answered": 18,
+      "unanswered": 10,
+      "with_paths": 16,
+      "total_paths": 597,
+      "median_ms": 4183.1,
+      "p95_ms": 27298.69
+    },
+    "arm_b": {
+      "instances": 28,
+      "answered": 3,
+      "unanswered": 25,
+      "with_paths": 3,
+      "total_paths": 54,
+      "median_ms": 1672.49,
+      "p95_ms": 18358.41
+    },
+    "arm_a_all": {
+      "instances": 50,
+      "answered": 39,
+      "unanswered": 11,
+      "with_paths": 16,
+      "total_paths": 597,
+      "median_ms": 4641.26,
+      "p95_ms": 27298.69
+    },
+    "arm_b_all": {
+      "instances": 50,
+      "answered": 9,
+      "unanswered": 41,
+      "with_paths": 3,
+      "total_paths": 54,
+      "median_ms": 1672.49,
+      "p95_ms": 18358.41
+    }
+  },
+  "per_instance": {
+    "django__django-10097": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30015.3,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-10554": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 80,
+        "millis": 22.78,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30015.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-10880": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30015.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-10914": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-10973": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 8,
+        "millis": 5.24,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 36,
+        "millis": 10.29,
+        "truncated": true,
+        "answered": true
+      }
+    },
+    "django__django-10999": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11066": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 20,
+        "millis": 8.87,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30008.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11087": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 71,
+        "millis": 21.1,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30008.8,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11095": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 4388.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30018.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11099": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30009.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11119": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30015.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11133": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30010.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11138": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 165,
+        "millis": 20047.66,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30019.6,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11141": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11149": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 106,
+        "millis": 11572.06,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30019.3,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11163": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 7921.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30023.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11179": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30059.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11206": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30019.3,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11211": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 29538.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      }
+    },
+    "django__django-11239": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 2,
+        "millis": 35.44,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 16,
+        "millis": 1672.49,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11265": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 40,
+        "millis": 14493.79,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30010.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11276": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 21833.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30029.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11292": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 7016.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 20859.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      }
+    },
+    "django__django-11299": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 20,
+        "millis": 12597.12,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30010.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11333": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 2,
+        "millis": 4641.26,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30037.8,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11433": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30016.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11451": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 12365.73,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11477": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 7333.8,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11490": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 26009.3,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30015.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11532": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30049.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11551": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 195.06,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30026.6,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11555": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 20,
+        "millis": 16537.61,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30012.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11603": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11728": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 4,
+        "millis": 3724.95,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 2,
+        "millis": 18358.41,
+        "truncated": false,
+        "answered": true
+      }
+    },
+    "django__django-11734": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 13121.9,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30023.8,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11740": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 20,
+        "millis": 2747.64,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30011.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11749": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 20,
+        "millis": 27298.69,
+        "truncated": true,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30017.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11790": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30011.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11815": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 18,
+        "millis": 22646.44,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30010.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11820": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30006.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11848": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 30024.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30007.3,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11880": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 17013.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      }
+    },
+    "django__django-11885": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 30014.6,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30011.4,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11951": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 30053.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30013.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_target_frontier exceeded query timeout after 29997 ms; limit is 29997 ms} {gql_status: 50N42} {gql_status_description: error:"
+      }
+    },
+    "django__django-11964": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30018.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-11999": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 21.95,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30025.5,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_target_frontier exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error:"
+      }
+    },
+    "django__django-12039": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30087.7,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 30000 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    },
+    "django__django-12050": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 1,
+        "millis": 27509.76,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30107.0,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-12125": {
+      "comparable": false,
+      "arm_a": {
+        "paths": 0,
+        "millis": 0.0,
+        "truncated": false,
+        "answered": true
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30014.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: client_query_runtime exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: genera"
+      }
+    },
+    "django__django-11400": {
+      "comparable": true,
+      "arm_a": {
+        "paths": 0,
+        "millis": 18458.1,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.TransientError.General.MemoryPoolOutOfMemoryError} {message: native_path_frontier_paths rejected by admission control: actual 250001 exceeds limit 250000} {gql_status: 50N42} {gql_sta"
+      },
+      "arm_b": {
+        "paths": 0,
+        "millis": 30009.2,
+        "truncated": false,
+        "answered": false,
+        "error": "{neo4j_code: Neo.ClientError.Transaction.Terminated} {message: native_path_neighbors exceeded query timeout after 29999 ms; limit is 29999 ms} {gql_status: 50N42} {gql_status_description: error: gener"
+      }
+    }
+  }
+}

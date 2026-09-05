@@ -1,0 +1,1754 @@
+{
+ "study": "S1 (docs/studies.md)",
+ "summary": {
+  "k": 6,
+  "per_repo": {
+   "django": {
+    "arm_a": {
+     "hits": 15,
+     "n": 30
+    },
+    "arm_b": {
+     "hits": 24,
+     "n": 44
+    }
+   },
+   "matplotlib": {
+    "arm_a": {
+     "hits": 2,
+     "n": 18
+    },
+    "arm_b": {
+     "hits": 0,
+     "n": 33
+    }
+   },
+   "pytest": {
+    "arm_a": {
+     "hits": 6,
+     "n": 16
+    },
+    "arm_b": {
+     "hits": 0,
+     "n": 19
+    }
+   },
+   "requests": {
+    "arm_a": {
+     "hits": 3,
+     "n": 6
+    },
+    "arm_b": {
+     "hits": 8,
+     "n": 8
+    }
+   },
+   "sphinx": {
+    "arm_a": {
+     "hits": 9,
+     "n": 33
+    },
+    "arm_b": {
+     "hits": 18,
+     "n": 44
+    }
+   },
+   "sympy": {
+    "arm_a": {
+     "hits": 0,
+     "n": 1
+    },
+    "arm_b": {
+     "hits": 3,
+     "n": 3
+    }
+   },
+   "xarray": {
+    "arm_a": {
+     "hits": 2,
+     "n": 14
+    },
+    "arm_b": {
+     "hits": 19,
+     "n": 21
+    }
+   }
+  },
+  "pooled": {
+   "arm_a": {
+    "hits": 37,
+    "n": 118,
+    "recall": 0.3136,
+    "wilson95": [
+     0.2368,
+     0.402
+    ]
+   },
+   "arm_b": {
+    "hits": 72,
+    "n": 172,
+    "recall": 0.4186,
+    "wilson95": [
+     0.3474,
+     0.4933
+    ]
+   }
+  }
+ },
+ "per_instance": [
+  {
+   "instance_id": "django__django-10097",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-10554",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-10880",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-10914",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-10973",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-10999",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-11066",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11087",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11095",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11099",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11119",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11133",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11138",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11141",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-11149",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11163",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11179",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11206",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11211",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11239",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11265",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11276",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11292",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11299",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11333",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11400",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11433",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11451",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-11477",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-11490",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11532",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11551",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11555",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11603",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": null
+  },
+  {
+   "instance_id": "django__django-11728",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11734",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11740",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11749",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11790",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11815",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11820",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11848",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11880",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11885",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11951",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-11964",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-11999",
+   "repo": "django",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-12039",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "django__django-12050",
+   "repo": "django",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "django__django-12125",
+   "repo": "django",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10323",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sympy__sympy-11618",
+   "repo": "sympy",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-13989",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10435",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10449",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10466",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10614",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-10673",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-11445",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-11510",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7440",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7454",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7462",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7590",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7748",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7757",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7889",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7910",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-7985",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8035",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8056",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8120",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8265",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8269",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8459",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8475",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8548",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8551",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8593",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8595",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8621",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8638",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-8721",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9229",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9230",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9258",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9281",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9320",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9367",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9461",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9591",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9602",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9658",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9673",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9698",
+   "repo": "sphinx",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sphinx-doc__sphinx-9711",
+   "repo": "sphinx",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-14623",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-20488",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-20676",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sympy__sympy-12096",
+   "repo": "sympy",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-20826",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-20859",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "sympy__sympy-12419",
+   "repo": "sympy",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-21568",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-22719",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-22865",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-22871",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-23299",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-23314",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-23412",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-23476",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24026",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24149",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24570",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24627",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24637",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24870",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-24970",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25122",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25287",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25311",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25332",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25479",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25775",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-25960",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-26113",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-26208",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-26291",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-26342",
+   "repo": "matplotlib",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "matplotlib__matplotlib-26466",
+   "repo": "matplotlib",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "psf__requests-1142",
+   "repo": "requests",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-10051",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-2905",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-1724",
+   "repo": "requests",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-1766",
+   "repo": "requests",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-1921",
+   "repo": "requests",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-2317",
+   "repo": "requests",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-2931",
+   "repo": "requests",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-5414",
+   "repo": "requests",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "psf__requests-6028",
+   "repo": "requests",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-10081",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-10356",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-5262",
+   "repo": "pytest",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-5631",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-5787",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-5809",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-5840",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-6197",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-6202",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7205",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7236",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7324",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7432",
+   "repo": "pytest",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7490",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7521",
+   "repo": "pytest",
+   "arm_a": null,
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7571",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-7982",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pytest-dev__pytest-8399",
+   "repo": "pytest",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-3095",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": null
+  },
+  {
+   "instance_id": "pydata__xarray-3151",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-3305",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-3677",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-3993",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4075",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4094",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": true
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4356",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4629",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4687",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4695",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-4966",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6461",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6599",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": false
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6721",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6744",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6938",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-6992",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-7229",
+   "repo": "xarray",
+   "arm_a": {
+    "hit": false
+   },
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-7233",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  },
+  {
+   "instance_id": "pydata__xarray-7393",
+   "repo": "xarray",
+   "arm_a": null,
+   "arm_b": {
+    "hit": true
+   }
+  }
+ ]
+}

@@ -1,0 +1,60 @@
+{
+ "study": "S5",
+ "eras": [
+  {
+   "era": "1.11",
+   "join_failed": false,
+   "arm_a_edges": 17782,
+   "arm_b_internal": 13505,
+   "compared": 6053,
+   "confirmed": 4558,
+   "unconfirmed": 1495,
+   "precision_ceiling": 0.753,
+   "scip_seconds": 24.09
+  },
+  {
+   "era": "2.2",
+   "join_failed": false,
+   "arm_a_edges": 19827,
+   "arm_b_internal": 12931,
+   "compared": 6049,
+   "confirmed": 4531,
+   "unconfirmed": 1518,
+   "precision_ceiling": 0.749,
+   "scip_seconds": 25.14
+  },
+  {
+   "era": "3.2",
+   "join_failed": false,
+   "arm_a_edges": 21407,
+   "arm_b_internal": 13990,
+   "compared": 6357,
+   "confirmed": 4809,
+   "unconfirmed": 1548,
+   "precision_ceiling": 0.7565,
+   "scip_seconds": 26.86
+  },
+  {
+   "era": "4.2",
+   "join_failed": false,
+   "arm_a_edges": 24037,
+   "arm_b_internal": 15072,
+   "compared": 6821,
+   "confirmed": 5195,
+   "unconfirmed": 1626,
+   "precision_ceiling": 0.7616,
+   "scip_seconds": 29.17
+  },
+  {
+   "era": "5.0",
+   "join_failed": false,
+   "arm_a_edges": 24885,
+   "arm_b_internal": 15307,
+   "compared": 6948,
+   "confirmed": 5263,
+   "unconfirmed": 1685,
+   "precision_ceiling": 0.7575,
+   "scip_seconds": 29.27
+  }
+ ]
+}

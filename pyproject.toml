@@ -1,0 +1,33 @@
+[project]
+name = "map-room"
+version = "0.1.0"
+description = "The Map Room — watch the map your coding agent is actually using, and the roads it can't see"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "networkx>=3.3",
+    "rich>=13.7",
+    "scipy>=1.14",
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-rust>=0.23",
+    "tree-sitter-c-sharp>=0.23",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-timeout>=2.3"]
+
+[project.scripts]
+map-room-seed = "ingest.seed:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 300
