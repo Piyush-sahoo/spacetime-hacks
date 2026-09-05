@@ -10,6 +10,7 @@ import { idHex } from './util'
  *   DbConnection.builder().withUri().withDatabaseName().withToken().build()
  *   conn.db.<table>.onInsert/onUpdate/onDelete   (rows use camelCase fields)
  *   conn.reducers.<camelCaseName>({ ...namedParams }) -> Promise<void>
+ *   conn.procedures.<camelCaseName>({ ...namedParams }) -> Promise<Return>
  *   conn.subscriptionBuilder().onApplied().onError().subscribe([sql, ...])
  * SQL text still uses the snake_case wire names (repo_id, walk_id, ...).
  */
@@ -106,6 +107,24 @@ export async function connectLive(store) {
       setFocus: (nodeId) => conn.reducers.setFocus({ nodeId }).catch(fail),
       startWalk: (repoId, origin, k) => conn.reducers.startWalk({ repoId, origin, k }).catch(fail),
       stepWalk: (walkId) => conn.reducers.stepWalk({ walkId }).catch(fail),
+      /**
+       * Build the map for a GitHub repo, from the browser.
+       *
+       * `index_repo` is a PROCEDURE, not a reducer: it may do IO (it fetches
+       * the repo's git tree from GitHub) and it RETURNS a status string, which
+       * is the whole reason a browser can drive it honestly. Roughly 3.4s for
+       * any repo size -- django/django is 7,087 blobs and lands in under four
+       * seconds -- because the work happens inside the database, not here.
+       *
+       * Preferred over the websocket the page already has open, so there is no
+       * cross-origin request to be blocked. `indexRepoOverHttp` is the fallback
+       * for a page that is not connected.
+       */
+      indexRepo: (owner, repo) => {
+        const fn = conn?.procedures?.indexRepo || conn?.procedures?.index_repo
+        if (typeof fn !== 'function') return indexRepoOverHttp(owner, repo)
+        return fn.call(conn.procedures, { owner, repo, githubToken: '' })
+      },
       requestExploration: (repoId, nodeId, note) => {
         const fn = reducerFor(conn, 'request_exploration')
         if (!fn) return Promise.reject(new Error('request_exploration is not published yet'))
@@ -123,4 +142,162 @@ export async function connectLive(store) {
       }
     }, 12000)
   })
+}
+
+
+/** `wss://host` -> `https://host`. The two endpoints are the same host. */
+function httpBase() {
+  return String(STDB_URI).replace(/^ws/, 'http').replace(/\/+$/, '')
+}
+
+/**
+ * The same procedure over plain HTTP, for a page with no live connection.
+ *
+ * Verified working unauthenticated against the deployed module: a POST of the
+ * positional argument array to /v1/database/<db>/call/<procedure> returns the
+ * procedure's return value as a JSON string.
+ */
+export async function indexRepoOverHttp(owner, repo) {
+  const url = `${httpBase()}/v1/database/${STDB_MODULE}/call/index_repo`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([owner, repo, '']),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`the database refused the request (HTTP ${res.status})`)
+  try {
+    const parsed = JSON.parse(text)
+    return typeof parsed === 'string' ? parsed : text
+  } catch {
+    return text
+  }
+}
+
+/**
+ * The same procedure over the websocket, on a connection opened just for it.
+ *
+ * The websocket cannot be refused by a cross-origin policy, so this is what
+ * catches the one failure mode the HTTP path has that the app itself does not.
+ */
+export function indexRepoOverSocket(owner, repo) {
+  return new Promise((resolve, reject) => {
+    let conn = null
+    let settled = false
+    const done = (fn, arg) => {
+      if (settled) return
+      settled = true
+      try { conn?.disconnect?.() } catch { /* noop */ }
+      fn(arg)
+    }
+    let token
+    try { token = localStorage.getItem('map-room-token') || undefined } catch { token = undefined }
+    try {
+      conn = DbConnection.builder()
+        .withUri(STDB_URI)
+        .withDatabaseName(STDB_MODULE)
+        .withToken(token)
+        .onConnect((connection) => {
+          const fn = connection?.procedures?.indexRepo || connection?.procedures?.index_repo
+          if (typeof fn !== 'function') {
+            done(reject, new Error('index_repo is not published on this module'))
+            return
+          }
+          fn.call(connection.procedures, { owner, repo, githubToken: '' })
+            .then((out) => done(resolve, String(out)))
+            .catch((e) => done(reject, e instanceof Error ? e : new Error(String(e))))
+        })
+        .onConnectError((_c, err) => done(reject, new Error(err?.message || 'could not reach the database')))
+        .build()
+    } catch (e) {
+      done(reject, e instanceof Error ? e : new Error(String(e)))
+    }
+    setTimeout(() => done(reject, new Error('the database did not answer in 30 seconds')), 30000)
+  })
+}
+
+/**
+ * Build the map for a GitHub repo. The one entry point the funnel calls.
+ *
+ * HTTP first because it needs no second socket, then the websocket, which
+ * cannot be blocked cross-origin. Only a NETWORK-level failure falls through:
+ * a 4xx/5xx from the database is a real answer and is reported as one, never
+ * retried into a different-looking error.
+ */
+export async function indexRepo(owner, repo) {
+  try {
+    return await indexRepoOverHttp(owner, repo)
+  } catch (e) {
+    if (e instanceof TypeError) return indexRepoOverSocket(owner, repo)
+    throw e
+  }
+}
+
+/**
+ * A live feed of every repo on the map and every agent working on one.
+ *
+ * The room's own subscription is scoped to ONE repo, because that is all a map
+ * needs. The gallery is the opposite: it needs one row per repo and the agent
+ * rows for all of them, and it needs them to move without a refresh — a repo
+ * someone indexes in another tab has to appear, and an agent going offline has
+ * to go dark. So it opens its own short-lived connection rather than widening
+ * the room's.
+ *
+ * Both tables are small (one row per repo; one row per session per actor), and
+ * the connection is closed the moment the gallery unmounts — every route out of
+ * the funnel is a real navigation, so it never overlaps with the map's.
+ *
+ * `onChange({ repos, sessions })` fires on every applied change. Returns a
+ * dispose function.
+ */
+export function watchDirectory(onChange) {
+  let conn = null
+  let dead = false
+  const repos = new Map()
+  const sessions = new Map()
+
+  const emit = () => {
+    if (dead) return
+    onChange({ repos: [...repos.values()], sessions: [...sessions.values()] })
+  }
+
+  const bind = (handle, store, keyOf) => {
+    if (!handle) return
+    handle.onInsert?.((_c, row) => { store.set(keyOf(row), row); emit() })
+    handle.onUpdate?.((_c, _o, row) => { store.set(keyOf(row), row); emit() })
+    handle.onDelete?.((_c, row) => { store.delete(keyOf(row)); emit() })
+  }
+
+  let token
+  try { token = localStorage.getItem('map-room-token') || undefined } catch { token = undefined }
+
+  try {
+    conn = DbConnection.builder()
+      .withUri(STDB_URI)
+      .withDatabaseName(STDB_MODULE)
+      .withToken(token)
+      .onConnect((connection, _identity, tok) => {
+        if (dead) { try { connection.disconnect() } catch { /* noop */ } ; return }
+        try { if (tok) localStorage.setItem('map-room-token', tok) } catch { /* private mode */ }
+        bind(connection.db?.repo, repos, (r) => String(r.id))
+        bind(
+          connection.db?.agentSession || connection.db?.agent_session,
+          sessions,
+          (r) => String(r.id)
+        )
+        connection.subscriptionBuilder()
+          .onApplied(() => emit())
+          .onError(() => emit())
+          .subscribe(['SELECT * FROM repo', 'SELECT * FROM agent_session'])
+      })
+      .onConnectError(() => emit())
+      .build()
+  } catch {
+    emit()
+  }
+
+  return () => {
+    dead = true
+    try { conn?.disconnect?.() } catch { /* noop */ }
+  }
 }

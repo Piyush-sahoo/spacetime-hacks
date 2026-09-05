@@ -1,0 +1,202 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   THE FUNNEL — landing, gallery, project page.
+
+   Every token, edge weight and shadow comes from index.css; nothing here
+   redefines a colour or a typeface. These are layout classes only, all
+   prefixed `fn-` so they cannot collide with the room's chrome.
+
+   The room's rules hold verbatim on these pages too:
+     · solid 1.5px ink on every edge — never soft, never rounded
+     · 2px hard ink shadow on anything pressable, 1px + nudge on :active
+     · DASHED MEANS IT DOES NOT EXIST YET / IS NOT AVAILABLE
+     · SELECTED MEANS INVERTED — never a colour
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.fn {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--mono);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* ── page chrome ─────────────────────────────────────────────────────────── */
+.fn-top {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0 14px; min-height: 52px;
+}
+.fn-mark { font-size: 14px; font-weight: 500; white-space: nowrap; }
+.fn-top .fn-spacer { flex: 1; }
+.fn-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.fn-main { flex: 1; padding: 26px 14px 48px; }
+.fn-wrap { max-width: 980px; margin: 0 auto; }
+.fn-narrow { max-width: 640px; }
+
+.fn-foot {
+  border-top: 1.5px solid var(--ink);
+  padding: 10px 14px;
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: space-between;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* ── type ────────────────────────────────────────────────────────────────── */
+.fn h1 {
+  font-size: 22px; font-weight: 500; line-height: 1.2;
+  margin: 4px 0 8px; text-wrap: balance; word-break: break-word;
+}
+.fn h2 {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); font-weight: 500;
+  margin: 28px 0 10px; padding-bottom: 4px; border-bottom: 1.5px solid var(--ink);
+}
+.fn p { margin: 0 0 12px; max-width: 62ch; }
+.fn .fn-lede { font-size: 14.5px; line-height: 1.5; max-width: 56ch; margin: 0 0 16px; }
+.fn a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.fn a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fn strong { font-weight: 600; }
+.fn .fn-dim { color: var(--ink-2); }
+.fn .fn-num { font-variant-numeric: tabular-nums; }
+
+/* ── the numbered walkthrough ────────────────────────────────────────────── */
+.fn-steps { list-style: none; margin: 0; padding: 0; counter-reset: fnstep; }
+.fn-step {
+  border: 1.5px solid var(--ink); padding: 12px 14px; margin: 0 0 12px;
+  background: var(--paper);
+}
+.fn-step > .fn-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+.fn-step .fn-no {
+  border: 1.5px solid var(--ink); min-width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-variant-numeric: tabular-nums; flex: none;
+  background: var(--hi-bg); color: var(--hi-fg);
+}
+.fn-step .fn-title { font-size: 13px; font-weight: 500; }
+.fn-step .fn-why { color: var(--ink-2); font-size: 11.5px; margin: 0 0 8px; max-width: 62ch; }
+.fn-step .fn-expect {
+  border-left: 1.5px solid var(--ink); padding: 2px 0 2px 10px;
+  font-size: 11.5px; color: var(--ink-2); margin: 0 0 4px; max-width: 62ch;
+}
+.fn-step .fn-expect b { color: var(--ink); font-weight: 500; }
+
+/* ── a copyable command / link ───────────────────────────────────────────── */
+.fn-copy { display: flex; align-items: stretch; gap: 0; margin: 0 0 8px; }
+.fn-copy pre {
+  flex: 1; min-width: 0; margin: 0;
+  border-right-width: 1.5px; border-color: var(--rule);
+}
+.fn-copy button {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
+  text-transform: uppercase; cursor: pointer; white-space: nowrap;
+  background: var(--paper); color: var(--ink);
+  border: 1.5px solid var(--ink); border-left-width: 1.5px;
+  padding: 0 10px; flex: none;
+}
+.fn-copy button:hover { background: var(--face); }
+.fn-copy button:active { transform: translate(1px, 1px); }
+.fn-copy button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fn-copy button.on { background: var(--hi-bg); color: var(--hi-fg); }
+
+/* ── the two links ───────────────────────────────────────────────────────── */
+.fn-links { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.fn-link { border: 1.5px solid var(--ink); padding: 12px 14px; }
+.fn-link .fn-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); display: block; margin-bottom: 2px;
+}
+.fn-link .fn-what { font-size: 12px; margin: 0 0 10px; max-width: none; }
+.fn-link.fn-pending { border-style: dashed; }
+.fn-link.fn-pending .fn-k { color: var(--ink-2); }
+
+/* ── the add-a-repo form ─────────────────────────────────────────────────── */
+.fn-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.fn-input {
+  flex: 1; min-width: 220px;
+  font-family: var(--mono); font-size: 13px; color: var(--ink);
+  background: var(--paper); border: 1.5px solid var(--ink);
+  padding: 8px 10px; box-shadow: 2px 2px 0 var(--ink);
+}
+.fn-input::placeholder { color: var(--ghost); }
+.fn-input:focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fn-input:disabled { opacity: .5; box-shadow: none; }
+
+/* Progress is a real bar with a real duration, not a spinner that means
+   nothing. Indexing takes about three and a half seconds whatever the repo
+   size, so a bar that fills over that long is an honest estimate — and it
+   stops at 92% and waits, because the answer, not the animation, is what
+   finishes it. */
+.fn-bar { border: 1.5px solid var(--ink); height: 12px; margin: 10px 0 6px; overflow: hidden; }
+.fn-bar > i { display: block; height: 100%; background: var(--hi-bg); transition: width .28s linear; }
+
+.fn-note { border: 1.5px solid var(--ink); padding: 10px 12px; margin: 12px 0 0; font-size: 12px; }
+.fn-note.fn-bad { border-style: dashed; }
+.fn-note .fn-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); display: block; margin-bottom: 4px;
+}
+
+/* ── the gallery ─────────────────────────────────────────────────────────── */
+.fn-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); }
+.fn-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  border: 1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+  background: var(--paper); color: var(--ink); font-family: var(--mono);
+  padding: 12px 14px; cursor: pointer;
+}
+.fn-card:hover { background: var(--face); }
+.fn-card:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.fn-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fn-card .fn-slug { font-size: 13px; word-break: break-all; }
+.fn-card .fn-facts {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-2); display: flex; gap: 10px; flex-wrap: wrap;
+}
+.fn-card .fn-live {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  background: var(--hi-bg); color: var(--hi-fg); padding: 1px 6px; align-self: flex-start;
+}
+.fn-card .fn-idle {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); border: 1.5px dashed var(--rule); padding: 0 5px; align-self: flex-start;
+}
+
+/* ── the measured facts table ────────────────────────────────────────────── */
+.fn-facts-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 12px; }
+.fn-facts-table th, .fn-facts-table td {
+  border: 1.5px solid var(--rule); padding: 6px 9px; text-align: left; vertical-align: top;
+}
+.fn-facts-table th {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); font-weight: 500; background: var(--face);
+}
+.fn-facts-table td.fn-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── failure modes ───────────────────────────────────────────────────────── */
+.fn-faq { list-style: none; margin: 0; padding: 0; }
+.fn-faq > li { border-bottom: 1.5px solid var(--rule); padding: 9px 0; }
+.fn-faq > li:last-child { border-bottom: none; }
+.fn-faq .fn-q { font-size: 12px; margin: 0 0 3px; }
+.fn-faq .fn-a { font-size: 12px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+
+.fn-warn { border: 1.5px solid var(--ink); padding: 12px 14px; margin: 12px 0; }
+.fn-warn .fn-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  background: var(--hi-bg); color: var(--hi-fg); padding: 1px 6px;
+  display: inline-block; margin-bottom: 6px;
+}
+
+/* Anything wide scrolls inside itself. The page body never scrolls sideways. */
+.fn-scroll { overflow-x: auto; }
+
+@media (max-width: 640px) {
+  .fn-links { grid-template-columns: 1fr; }
+  .fn-main { padding: 18px 12px 40px; }
+  .fn-top { padding: 6px 12px; }
+  .fn-copy { flex-direction: column; }
+  .fn-copy pre { border-bottom-width: 0; }
+  .fn-copy button { padding: 6px 10px; }
+  .fn-grid { grid-template-columns: 1fr; }
+}
