@@ -200,6 +200,50 @@ const path_cache = table(
   }
 );
 
+/**
+ * Provenance for a repo that `index_repo` put on the map, straight from GitHub.
+ *
+ * `truncated` is the honest flag: GitHub's trees API caps a single response, and
+ * a capped tree means the map is a PARTIAL map. It is recorded machine-readably
+ * here AND stamped into `repo.label`, because a map that quietly lies about its
+ * own edges is worse than no map.
+ */
+const repo_index = table(
+  { name: 'repo_index', public: true },
+  {
+    repo_id: t.u64().primaryKey(),
+    owner: t.string(),
+    repo: t.string(),
+    ref: t.string(),
+    files_seen: t.u32(), // blobs GitHub returned
+    files_indexed: t.u32(), // source files that became nodes
+    truncated: t.bool(), // GitHub truncated the tree
+    capped: t.bool(), // we hit our own MAX_INDEX_FILES fuse
+    at: t.timestamp(),
+  }
+);
+
+/**
+ * One-sentence description of what a file does, written by an LLM.
+ *
+ * A SEPARATE TABLE, not a `node.summary` column, on purpose: adding a column to
+ * a populated table forces a destructive republish, and the four loaded graphs
+ * are not expendable. A new table is an additive migration.
+ *
+ * Descriptions only. The call graph is never LLM-derived — a hallucinated edge
+ * would corrupt the exact relation this product measures.
+ */
+const node_summary = table(
+  { name: 'node_summary', public: true },
+  {
+    node_id: t.u64().primaryKey(),
+    repo_id: t.u64().index('btree'),
+    summary: t.string(),
+    model: t.string(),
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   repo,
   node,
@@ -213,12 +257,20 @@ const spacetimedb = schema({
   agent_session,
   exploration_request,
   path_cache,
+  repo_index,
+  node_summary,
 });
 export default spacetimedb;
 
 // ------------------------------------------------------------------ helpers
 
 type Ctx = ReducerCtx<typeof spacetimedb.schemaType>;
+/**
+ * The table handle set. Identical inside a reducer and inside a procedure's
+ * `withTx`, because `TransactionCtx extends ReducerCtx` — which is what lets
+ * `index_repo` reuse the exact same row-writing code the seeder reducers use.
+ */
+type Db = Ctx['db'];
 
 /** JSON numbers -> bigint, tolerating strings from the seeder. */
 function toBig(v: unknown): bigint {
@@ -242,24 +294,35 @@ function parseRows(rows_json: string): Record<string, unknown>[] {
 
 // ------------------------------------------------------------------ reducers
 
+/**
+ * Create-or-reset the repo row for `slug` and hand back its id.
+ *
+ * Idempotent: re-running the seeder — or re-indexing a GitHub repo — must not
+ * fork a second repo row. `create_repo` and `index_repo` both go through here,
+ * so there is exactly one definition of what a repo row is.
+ */
+function upsertRepo(db: Db, slug: string, label: string): bigint {
+  for (const existing of db.repo.slug.filter(slug)) {
+    db.repo.id.update({ ...existing, label, status: 'loading' });
+    return existing.id;
+  }
+  const row = db.repo.insert({
+    id: 0n,
+    slug,
+    label,
+    node_count: 0,
+    edge_count: 0,
+    reachability: 0.0,
+    status: 'loading',
+  });
+  return row.id;
+}
+
 export const create_repo = spacetimedb.reducer(
   { name: 'create_repo' },
   { slug: t.string(), label: t.string() },
   (ctx, { slug, label }) => {
-    // Idempotent: re-running the seeder must not fork a second repo row.
-    for (const existing of ctx.db.repo.slug.filter(slug)) {
-      ctx.db.repo.id.update({ ...existing, label, status: 'loading' });
-      return;
-    }
-    ctx.db.repo.insert({
-      id: 0n,
-      slug,
-      label,
-      node_count: 0,
-      edge_count: 0,
-      reachability: 0.0,
-      status: 'loading',
-    });
+    upsertRepo(ctx.db, slug, label);
   }
 );
 
@@ -315,25 +378,30 @@ export const ingest_edges = spacetimedb.reducer(
   }
 );
 
+/** Recount, drop the stale path memo, flip the repo to "ready". */
+function finishRepoRow(db: Db, repo_id: bigint, reachability: number): void {
+  const r = db.repo.id.find(repo_id);
+  if (!r) return;
+  let nodes = 0;
+  for (const _ of db.node.repo_id.filter(repo_id)) nodes += 1;
+  let edges = 0;
+  for (const _ of db.edge.repo_id.filter(repo_id)) edges += 1;
+  // The node set just changed, so every memoised path resolution is stale.
+  db.path_cache.repo_id.delete(repo_id);
+  db.repo.id.update({
+    ...r,
+    node_count: nodes,
+    edge_count: edges,
+    reachability,
+    status: 'ready',
+  });
+}
+
 export const finish_repo = spacetimedb.reducer(
   { name: 'finish_repo' },
   { repo_id: t.u64(), reachability: t.f32() },
   (ctx, { repo_id, reachability }) => {
-    const r = ctx.db.repo.id.find(repo_id);
-    if (!r) return;
-    let nodes = 0;
-    for (const _ of ctx.db.node.repo_id.filter(repo_id)) nodes += 1;
-    let edges = 0;
-    for (const _ of ctx.db.edge.repo_id.filter(repo_id)) edges += 1;
-    // The node set just changed, so every memoised path resolution is stale.
-    ctx.db.path_cache.repo_id.delete(repo_id);
-    ctx.db.repo.id.update({
-      ...r,
-      node_count: nodes,
-      edge_count: edges,
-      reachability,
-      status: 'ready',
-    });
+    finishRepoRow(ctx.db, repo_id, reachability);
   }
 );
 
@@ -563,7 +631,7 @@ const MAX_CANDIDATES = 4;
 
 const SOURCE_EXTS = [
   '.py', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
-  '.rs', '.cs', '.go', '.java', '.rb', '.kt', '.scala',
+  '.rs', '.cs', '.go', '.java', '.rb', '.kt', '.scala', '.php',
   '.c', '.h', '.cc', '.cpp', '.hpp',
 ];
 
@@ -637,7 +705,19 @@ function moduleToPath(qual: string): string {
     mod = dot >= 0 ? rest.slice(dot + 1) : rest;
   }
   if (mod.length === 0) return '';
-  return mod.split('.').join('/') + '.py';
+  const segs = mod.split('.');
+  // Nodes written by `index_repo` carry the real filename after `::`
+  // (`src.lib.auth::auth.ts`), so the extension is known rather than assumed.
+  const symbol = qual.indexOf('::') >= 0 ? qual.slice(qual.indexOf('::') + 2) : '';
+  for (const ext of SOURCE_EXTS) {
+    if (symbol.endsWith(ext) && symbol.indexOf('/') === -1) {
+      segs.pop();
+      segs.push(symbol);
+      return segs.join('/');
+    }
+  }
+  // Shipped graphs are Python; `.py` is the honest default for them.
+  return segs.join('/') + '.py';
 }
 
 /**
@@ -916,5 +996,460 @@ export const reset_coverage = spacetimedb.reducer(
       if (s.repo_id === repo_id) ids.push(s.id);
     }
     for (const id of ids) ctx.db.agent_session.id.delete(id);
+  }
+);
+
+// ============================================================================
+// v3 — GitHub indexing. Paste a repo URL, get a map. No backend, no build step.
+// ============================================================================
+
+/**
+ * NODE ID ALLOCATION.
+ *
+ * `node.id` is a GLOBAL primary key, not scoped by repo, so two repos that mint
+ * overlapping ids silently lose rows to each other (repo 3 in the live database
+ * is already dark for exactly this reason). Every indexed repo therefore gets
+ * its own reserved, non-overlapping band:
+ *
+ *     node.id = INDEX_ID_BASE + repo_id * INDEX_ID_STRIDE + ordinal
+ *
+ * with `ordinal` running 1..N inside the repo. Ordinal 0 is never issued,
+ * because node_id 0 is the sentinel `report_touch` writes for an unresolved
+ * path — a real node must never be able to wear it.
+ *
+ * The base sits three orders of magnitude above every id the shipped graphs use
+ * (their maximum is under 1e12; verified with `SELECT id FROM node WHERE id >
+ * 1000000000000`, which returns nothing), so an indexed repo can never collide
+ * with a seeded one. The stride reserves a billion ids per repo against a fuse
+ * of 4,000, so a repo can never bleed into its neighbour either. Re-indexing is
+ * stable: the band is a pure function of repo_id, so the same repo re-indexed
+ * reuses the same id space instead of orphaning its old nodes.
+ */
+const INDEX_ID_BASE = 4_000_000_000_000_000n;
+const INDEX_ID_STRIDE = 1_000_000_000n;
+
+function idBand(repo_id: bigint): bigint {
+  return INDEX_ID_BASE + repo_id * INDEX_ID_STRIDE;
+}
+
+/** Fuse on nodes. django/django is ~10k source files; 4k is a demo-sized map. */
+const MAX_INDEX_FILES = 4000;
+/** Fuse on edges. Containment is ~2 edges per file, so this is slack, not a limit. */
+const MAX_INDEX_EDGES = 16000;
+/** Rows per transaction, so one repo is many small writes rather than one huge one. */
+const INDEX_TX_CHUNK = 1000;
+
+/** Extensions that become nodes. A strict subset of SOURCE_EXTS, so the
+ *  extension `index_repo` strips is exactly the one `report_touch` strips. */
+const INDEX_EXTS = [
+  '.py', '.ts', '.tsx', '.js', '.jsx', '.rs', '.cs', '.go',
+  '.java', '.rb', '.php', '.c', '.cpp', '.h',
+];
+
+/** Directories that are somebody else's code, or output, not the map. */
+const SKIP_DIRS = new Set([
+  'node_modules', 'vendor', 'dist', 'build', '.git', 'target', 'venv', '.venv',
+]);
+
+function hasIndexExt(path: string): boolean {
+  for (const ext of INDEX_EXTS) {
+    if (path.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+/** `test`/`spec` anywhere in a path segment or the filename makes it a Test. */
+function isTestPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  for (const seg of lower.split('/')) {
+    if (seg.includes('test') || seg.includes('spec')) return true;
+  }
+  return false;
+}
+
+/**
+ * THE SEAM. `src/lib/auth.ts` -> `src.lib.auth`, byte-for-byte what
+ * `dottedPath()` produces for the same path inside `report_touch`.
+ *
+ * This is the one thing that has to be right. If a node's qual does not match
+ * what the touch resolver derives from a real file path, every touch resolves
+ * to node_id 0, the map stays dark, and nothing anywhere reports a failure.
+ * So it does not approximate `dottedPath` — it CALLS it.
+ */
+function qualForPath(path: string): string {
+  const mod = dottedPath(path);
+  const segs = path.split('/');
+  const base = segs[segs.length - 1];
+  return `${mod}::${base}`;
+}
+
+/** The directory a repo-relative path lives in. '' for a root-level file. */
+function dirOf(path: string): string {
+  const i = path.lastIndexOf('/');
+  return i === -1 ? '' : path.slice(0, i);
+}
+
+function parentDir(dir: string): string | null {
+  if (dir === '') return null;
+  const i = dir.lastIndexOf('/');
+  return i === -1 ? '' : dir.slice(0, i);
+}
+
+type TreeEntry = { path: string; type: string };
+
+/**
+ * Put an arbitrary public GitHub repo on the shared map.
+ *
+ * Everything happens inside the database: one call to GitHub's trees API, the
+ * filter, the node and edge rows, the repo row. There is no backend, no crawler
+ * and no build step between a pasted URL and a live map every tab can see.
+ *
+ * `github_token` may be empty — unauthenticated GitHub allows 60 requests an
+ * hour, which is plenty. A PAT raises the ceiling and reaches private repos.
+ * It is an argument, never a constant: no credential is ever compiled in.
+ */
+export const indexRepo = spacetimedb.procedure(
+  { name: 'index_repo' },
+  { owner: t.string(), repo: t.string(), github_token: t.string() },
+  t.string(),
+  (ctx, { owner, repo, github_token }) => {
+    const o = owner.trim();
+    const r = repo.trim();
+    if (o.length === 0 || r.length === 0) return 'error: owner and repo are required';
+
+    // ---- 1. fetch the whole tree in one call --------------------------------
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'map-room',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (github_token.trim().length > 0) {
+      headers.Authorization = `Bearer ${github_token.trim()}`;
+    }
+
+    const res = ctx.http.fetch(
+      `https://api.github.com/repos/${o}/${r}/git/trees/HEAD?recursive=1`,
+      { method: 'GET', headers }
+    );
+    if (res.status !== 200) {
+      return `error: github returned ${res.status} for ${o}/${r}`;
+    }
+
+    let tree: TreeEntry[] = [];
+    let truncated = false;
+    let sha = '';
+    try {
+      const data = res.json() as { tree?: TreeEntry[]; truncated?: boolean; sha?: string };
+      tree = Array.isArray(data.tree) ? data.tree : [];
+      truncated = data.truncated === true;
+      sha = typeof data.sha === 'string' ? data.sha : '';
+    } catch {
+      return `error: github returned unparseable JSON for ${o}/${r}`;
+    }
+
+    // ---- 2. filter to source files ------------------------------------------
+    let blobs = 0;
+    const files: string[] = [];
+    let capped = false;
+    for (const entry of tree) {
+      if (!entry || entry.type !== 'blob' || typeof entry.path !== 'string') continue;
+      blobs += 1;
+      const path = entry.path;
+      if (!hasIndexExt(path)) continue;
+      let skipped = false;
+      const segs = path.split('/');
+      for (let i = 0; i < segs.length - 1; i++) {
+        if (SKIP_DIRS.has(segs[i])) { skipped = true; break; }
+      }
+      if (skipped) continue;
+      if (files.length >= MAX_INDEX_FILES) { capped = true; continue; }
+      files.push(path);
+    }
+    if (files.length === 0) {
+      return `error: no indexable source files in ${o}/${r} (${blobs} blobs seen)`;
+    }
+
+    // Sorting makes the id band deterministic: the same tree always yields the
+    // same node id for the same file, so a re-index is an update, not a shuffle.
+    files.sort();
+
+    const slug = `${o}/${r}`;
+    // A partial map must announce itself on the row a human actually reads.
+    const label = truncated
+      ? `${slug} — PARTIAL: GitHub truncated the tree`
+      : capped
+        ? `${slug} — PARTIAL: capped at ${MAX_INDEX_FILES} files`
+        : slug;
+
+    // ---- 3. repo row (fetch is done; only now do we take a transaction) -----
+    let repo_id = 0n;
+    let refused = '';
+    ctx.withTx(tx => {
+      repo_id = upsertRepo(tx.db, slug, label);
+      // Never let an indexed repo bulldoze a seeded graph: seeded nodes live
+      // far below the index band, and their ids are not ours to recycle.
+      for (const n of tx.db.node.repo_id.filter(repo_id)) {
+        if (n.id < INDEX_ID_BASE) {
+          refused = `error: repo ${repo_id} (${slug}) holds seeded nodes; refusing to reindex`;
+          break;
+        }
+      }
+      if (refused.length === 0) {
+        // Re-index is a replace, not an append.
+        tx.db.node.repo_id.delete(repo_id);
+        tx.db.edge.repo_id.delete(repo_id);
+        tx.db.path_cache.repo_id.delete(repo_id);
+      }
+    });
+    if (refused.length > 0) return refused;
+
+    const base = idBand(repo_id);
+
+    // ---- 4. one node per source file ----------------------------------------
+    const idOf = new Map<string, bigint>();
+    type NodeRow = { id: bigint; repo_id: bigint; kind: string; name: string; qual: string };
+    const nodeRows: NodeRow[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const path = files[i];
+      const id = base + BigInt(i + 1); // ordinal 0 is reserved for "unresolved"
+      idOf.set(path, id);
+      const segs = path.split('/');
+      nodeRows.push({
+        id,
+        repo_id,
+        kind: isTestPath(path) ? 'Test' : 'Function',
+        name: segs[segs.length - 1],
+        qual: qualForPath(path),
+      });
+    }
+
+    for (let i = 0; i < nodeRows.length; i += INDEX_TX_CHUNK) {
+      const chunk = nodeRows.slice(i, i + INDEX_TX_CHUNK);
+      ctx.withTx(tx => {
+        for (const row of chunk) tx.db.node.insert(row);
+      });
+    }
+
+    // ---- 5. edges from directory containment, capped ------------------------
+    //
+    // A file-to-file mesh inside one directory is quadratic: a 500-file folder
+    // alone would be 250,000 edges. So each directory elects a REPRESENTATIVE
+    // (its alphabetically first file) and everything hangs off that star, with
+    // representatives chained to their parent's representative. The result is
+    // linear — about two edges per file — and still connects any file to any
+    // other by a short path, which is what the backwards walk needs.
+    //
+    // Both directions are written, because the walk rides PREDECESSORS: a walk
+    // starting at a leaf file must be able to climb to its representative.
+    const repOf = new Map<string, bigint>();
+    for (const path of files) {
+      const dir = dirOf(path);
+      if (!repOf.has(dir)) repOf.set(dir, idOf.get(path)!);
+    }
+
+    type EdgeRow = { id: bigint; repo_id: bigint; src: bigint; dst: bigint; kind: string };
+    const edgeRows: EdgeRow[] = [];
+    const pushEdge = (src: bigint, dst: bigint, kind: string): void => {
+      if (edgeRows.length >= MAX_INDEX_EDGES) return;
+      edgeRows.push({ id: 0n, repo_id, src, dst, kind });
+    };
+
+    for (const path of files) {
+      const dir = dirOf(path);
+      const rep = repOf.get(dir)!;
+      const id = idOf.get(path)!;
+      if (id === rep) continue;
+      pushEdge(rep, id, 'CONTAINS');
+      pushEdge(id, rep, 'IN_DIR');
+    }
+
+    for (const [dir, rep] of repOf) {
+      // Climb to the nearest ancestor that actually elected a representative;
+      // directories that hold only subdirectories have none.
+      let up = parentDir(dir);
+      while (up !== null && !repOf.has(up)) up = parentDir(up);
+      if (up === null) continue;
+      const parentRep = repOf.get(up)!;
+      if (parentRep === rep) continue;
+      pushEdge(parentRep, rep, 'CONTAINS');
+      pushEdge(rep, parentRep, 'IN_DIR');
+    }
+
+    for (let i = 0; i < edgeRows.length; i += INDEX_TX_CHUNK) {
+      const chunk = edgeRows.slice(i, i + INDEX_TX_CHUNK);
+      ctx.withTx(tx => {
+        for (const row of chunk) tx.db.edge.insert(row);
+      });
+    }
+
+    // ---- 6. provenance + finish ---------------------------------------------
+    const nFiles = files.length;
+    const nEdges = edgeRows.length;
+    ctx.withTx(tx => {
+      const prov = {
+        repo_id,
+        owner: o,
+        repo: r,
+        ref: sha,
+        files_seen: blobs,
+        files_indexed: nFiles,
+        truncated,
+        capped,
+        at: tx.timestamp,
+      };
+      if (tx.db.repo_index.repo_id.find(repo_id)) {
+        tx.db.repo_index.repo_id.update(prov);
+      } else {
+        tx.db.repo_index.insert(prov);
+      }
+      // Reachability is not measurable on a containment graph, and inventing a
+      // number here would be a lie the verdict later cites. 0 means "unknown".
+      finishRepoRow(tx.db, repo_id, 0.0);
+    });
+
+    return (
+      `ok repo_id=${repo_id} slug=${slug} blobs=${blobs} nodes=${nFiles} ` +
+      `edges=${nEdges} truncated=${truncated} capped=${capped} ` +
+      `id_band=[${base + 1n}..${base + BigInt(nFiles)}]`
+    );
+  }
+);
+
+// ---------------------------------------------------------- region summaries
+
+const GEMINI_MODEL = 'gemini-2.0-flash';
+/** Enough of a file to say what it does; keeps the prompt and the latency small. */
+const MAX_FILE_CHARS = 12000;
+
+/**
+ * Repo-relative file path for a node, exact for indexed repos.
+ * `src.lib.auth::auth.ts` -> `src/lib/auth.ts`
+ */
+function pathOfNode(qual: string): string {
+  return moduleToPath(qual);
+}
+
+/** `owner/repo` for a repo row, falling back to the seeded `owner__repo-1234` shape. */
+function ownerRepoOf(db: Db, repo_id: bigint): { owner: string; repo: string } | null {
+  const prov = db.repo_index.repo_id.find(repo_id);
+  if (prov) return { owner: prov.owner, repo: prov.repo };
+  const r = db.repo.id.find(repo_id);
+  if (!r) return null;
+  const slug = r.slug;
+  const slash = slug.indexOf('/');
+  if (slash > 0) return { owner: slug.slice(0, slash), repo: slug.slice(slash + 1) };
+  const dunder = slug.indexOf('__');
+  if (dunder > 0) {
+    const owner = slug.slice(0, dunder);
+    let rest = slug.slice(dunder + 2);
+    const dash = rest.lastIndexOf('-');
+    if (dash > 0) rest = rest.slice(0, dash);
+    return { owner, repo: rest };
+  }
+  return null;
+}
+
+/**
+ * Say, in one sentence, what the file behind a node actually does.
+ *
+ * Fetches the file from GitHub, asks Gemini to describe it, stores the answer on
+ * `node_summary` so a dark region on the map reads "validates password reset
+ * tokens" instead of `auth.ts`.
+ *
+ * `api_key` is an ARGUMENT. It is never stored, never logged, never a constant.
+ *
+ * Deliberately NOT used to extract the call graph: parsing stays deterministic,
+ * because a hallucinated edge would corrupt the exact relation this product
+ * measures. The model writes prose about a file; it never asserts a relation.
+ */
+export const summarizeRegion = spacetimedb.procedure(
+  { name: 'summarize_region' },
+  { node_id: t.u64(), api_key: t.string() },
+  t.string(),
+  (ctx, { node_id, api_key }) => {
+    const key = api_key.trim();
+    if (key.length === 0) return 'error: api_key is required (it is never stored)';
+
+    // Read what we need, then drop the transaction before touching the network.
+    let path = '';
+    let name = '';
+    let owner = '';
+    let ghRepo = '';
+    let repo_id = 0n;
+    ctx.withTx(tx => {
+      const n = tx.db.node.id.find(node_id);
+      if (!n) return;
+      repo_id = n.repo_id;
+      name = n.name;
+      path = pathOfNode(n.qual);
+      const or = ownerRepoOf(tx.db, n.repo_id);
+      if (or) {
+        owner = or.owner;
+        ghRepo = or.repo;
+      }
+    });
+    if (repo_id === 0n) return `error: no node ${node_id}`;
+    if (owner.length === 0 || path.length === 0) {
+      return `error: cannot map node ${node_id} back to a GitHub file`;
+    }
+
+    const raw = ctx.http.fetch(
+      `https://raw.githubusercontent.com/${owner}/${ghRepo}/HEAD/${path}`,
+      { method: 'GET', headers: { 'User-Agent': 'map-room' } }
+    );
+    if (raw.status !== 200) {
+      return `error: github returned ${raw.status} for ${owner}/${ghRepo}/${path}`;
+    }
+    const body = raw.text().slice(0, MAX_FILE_CHARS);
+
+    const prompt =
+      `You are labelling a map of a codebase. In ONE sentence of at most 20 ` +
+      `words, say what this file does. Start with a verb. No preamble, no ` +
+      `markdown, no filename.\n\nFile: ${path}\n\n${body}`;
+
+    const gem = ctx.http.fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'map-room' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      }
+    );
+    if (gem.status !== 200) return `error: gemini returned ${gem.status}`;
+
+    let summary = '';
+    try {
+      const data = gem.json() as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      for (const part of parts) {
+        if (typeof part.text === 'string') summary += part.text;
+      }
+    } catch {
+      return 'error: gemini returned unparseable JSON';
+    }
+    summary = summary.trim().replace(/\s+/g, ' ');
+    if (summary.length === 0) return 'error: gemini returned no text';
+    if (summary.length > 400) summary = summary.slice(0, 400);
+
+    const captured = summary;
+    const rid = repo_id;
+    ctx.withTx(tx => {
+      const row = {
+        node_id,
+        repo_id: rid,
+        summary: captured,
+        model: GEMINI_MODEL,
+        at: tx.timestamp,
+      };
+      if (tx.db.node_summary.node_id.find(node_id)) {
+        tx.db.node_summary.node_id.update(row);
+      } else {
+        tx.db.node_summary.insert(row);
+      }
+    });
+
+    return `ok ${name}: ${summary}`;
   }
 );

@@ -174,3 +174,64 @@ GET https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1
 ```
 One call = every file path in the repo. django/django = 10,361 entries in 3.2s.
 `truncated: true` must be recorded and surfaced, never silently ignored.
+
+---
+
+## VERIFIED: hook payload fields, subagents, and the Bash blind spot
+
+Measured by instrumenting the live hook and running a real subagent. Do not re-derive.
+
+### PostToolUse payload — every field, confirmed
+
+```
+cwd  duration_ms  effort  hook_event_name  permission_mode  prompt_id
+session_id  tool_input  tool_name  tool_response  tool_use_id  transcript_path
+agent_id     <- PRESENT ONLY FOR SUBAGENTS
+agent_type   <- PRESENT ONLY FOR SUBAGENTS  (e.g. "general-purpose")
+```
+
+### Subagents inherit the parent session_id
+
+A subagent's tool calls fire the hook with the **same `session_id` as the parent**, plus
+`agent_id` and `agent_type`. Verified: a subagent's three `Read` calls landed under the
+parent session.
+
+**So the discriminator is the presence of `agent_id`:**
+
+| | main agent | subagent |
+|---|---|---|
+| `session_id` | parent | parent (same) |
+| `agent_id` | absent | stable per-subagent id |
+| `agent_type` | absent | e.g. `general-purpose` |
+
+This is what makes "main agent one colour, each subagent its own colour" buildable: colour
+by `agent_id`, with absence meaning the main agent.
+
+### THE BASH BLIND SPOT — the biggest coverage gap
+
+The hook matches `Read|Edit|Write|Grep|Glob`. **It does not match `Bash`.** Every `cat`,
+`grep`, `sed`, `head` and `rg` an agent runs is invisible to the map.
+
+Measured impact: a session whose subagents read hundreds of files recorded **8 touches**,
+because the agents were using shell commands rather than the file tools.
+
+Fixing this is worth more than any other coverage change. It means matching `Bash` and
+parsing file paths out of the command string — imperfect, but the alternative is missing
+most of an agent's real exploration.
+
+### Repo binding
+
+`repo_id` currently defaults to `1`. **This is dangerous at scale**: every teammate who
+installs without config reports onto the django map, polluting everyone's coverage and
+making the leaderboard meaningless.
+
+Correct behaviour: derive the repo from `git remote get-url origin` -> `owner/repo`, which
+is exactly the slug `index_repo` writes. If the remote is not indexed, stay silent rather
+than defaulting to someone else's map.
+
+### Branches
+
+One map per repo; the branch is metadata. A file that exists on a feature branch but not
+in the indexed tree resolves to `node_id = 0`. Rather than dropping it, it should be added
+to the map as **new territory** in a distinct style -- which covers new files, PR additions
+and index misses with one mechanism, and reads as new land appearing rather than a bug.

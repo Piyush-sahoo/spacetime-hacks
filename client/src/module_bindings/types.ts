@@ -74,6 +74,15 @@ export const NodeCov = __t.object("NodeCov", {
 });
 export type NodeCov = __Infer<typeof NodeCov>;
 
+export const NodeSummary = __t.object("NodeSummary", {
+  nodeId: __t.u64(),
+  repoId: __t.u64(),
+  summary: __t.string(),
+  model: __t.string(),
+  at: __t.timestamp(),
+});
+export type NodeSummary = __Infer<typeof NodeSummary>;
+
 export const Participant = __t.object("Participant", {
   identity: __t.identity(),
   name: __t.string(),
@@ -100,6 +109,19 @@ export const Repo = __t.object("Repo", {
   status: __t.string(),
 });
 export type Repo = __Infer<typeof Repo>;
+
+export const RepoIndex = __t.object("RepoIndex", {
+  repoId: __t.u64(),
+  owner: __t.string(),
+  repo: __t.string(),
+  ref: __t.string(),
+  filesSeen: __t.u32(),
+  filesIndexed: __t.u32(),
+  truncated: __t.bool(),
+  capped: __t.bool(),
+  at: __t.timestamp(),
+});
+export type RepoIndex = __Infer<typeof RepoIndex>;
 
 export const Touch = __t.object("Touch", {
   id: __t.u64(),

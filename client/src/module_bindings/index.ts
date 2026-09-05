@@ -50,6 +50,8 @@ import StartWalkReducer from "./start_walk_reducer";
 import StepWalkReducer from "./step_walk_reducer";
 
 // Import all procedure arg schemas
+import * as IndexRepoProcedure from "./index_repo_procedure";
+import * as SummarizeRegionProcedure from "./summarize_region_procedure";
 
 // Import all table schema definitions
 import AgentSessionRow from "./agent_session_table";
@@ -58,8 +60,10 @@ import ExplorationRequestRow from "./exploration_request_table";
 import FrontierRow from "./frontier_table";
 import NodeRow from "./node_table";
 import NodeCovRow from "./node_cov_table";
+import NodeSummaryRow from "./node_summary_table";
 import ParticipantRow from "./participant_table";
 import RepoRow from "./repo_table";
+import RepoIndexRow from "./repo_index_table";
 import TouchRow from "./touch_table";
 import VerdictRow from "./verdict_table";
 import WalkRow from "./walk_table";
@@ -164,6 +168,20 @@ const tablesSchema = __schema({
       { name: 'node_cov_node_id_key', constraint: 'unique', columns: ['nodeId'] },
     ],
   }, NodeCovRow),
+  nodeSummary: __table({
+    name: 'node_summary',
+    indexes: [
+      { accessor: 'node_id', name: 'node_summary_node_id_idx_btree', algorithm: 'btree', columns: [
+        'nodeId',
+      ] },
+      { accessor: 'repo_id', name: 'node_summary_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'node_summary_node_id_key', constraint: 'unique', columns: ['nodeId'] },
+    ],
+  }, NodeSummaryRow),
   participant: __table({
     name: 'participant',
     indexes: [
@@ -192,6 +210,17 @@ const tablesSchema = __schema({
       { name: 'repo_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, RepoRow),
+  repoIndex: __table({
+    name: 'repo_index',
+    indexes: [
+      { accessor: 'repo_id', name: 'repo_index_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'repo_index_repo_id_key', constraint: 'unique', columns: ['repoId'] },
+    ],
+  }, RepoIndexRow),
   touch: __table({
     name: 'touch',
     indexes: [
@@ -256,6 +285,8 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("index_repo", IndexRepoProcedure.params, IndexRepoProcedure.returnType),
+  __procedureSchema("summarize_region", SummarizeRegionProcedure.params, SummarizeRegionProcedure.returnType),
 );
 
 type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "tables"> & {
@@ -266,6 +297,10 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "exploration_request": Omit<typeof tablesSchema.schemaType.tables["explorationRequest"], "accessorName"> & { readonly accessorName: "exploration_request" };
     /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
     readonly "node_cov": Omit<typeof tablesSchema.schemaType.tables["nodeCov"], "accessorName"> & { readonly accessorName: "node_cov" };
+    /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */
+    readonly "node_summary": Omit<typeof tablesSchema.schemaType.tables["nodeSummary"], "accessorName"> & { readonly accessorName: "node_summary" };
+    /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
+    readonly "repo_index": Omit<typeof tablesSchema.schemaType.tables["repoIndex"], "accessorName"> & { readonly accessorName: "repo_index" };
   };
 };
 
@@ -287,6 +322,8 @@ const tableAccessorAliases = {
   "agent_session": "agentSession",
   "exploration_request": "explorationRequest",
   "node_cov": "nodeCov",
+  "node_summary": "nodeSummary",
+  "repo_index": "repoIndex",
 } as const;
 
 function __withTableAccessorAliases<T extends object>(target: T, freeze = false): T {
@@ -313,6 +350,10 @@ export type DbView = __DbViewBase & {
   readonly "exploration_request": __DbViewBase["explorationRequest"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
   readonly "node_cov": __DbViewBase["nodeCov"];
+  /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */
+  readonly "node_summary": __DbViewBase["nodeSummary"];
+  /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
+  readonly "repo_index": __DbViewBase["repoIndex"];
 };
 
 type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
@@ -323,6 +364,10 @@ export type Tables = __TablesBase & {
   readonly "exploration_request": __TablesBase["explorationRequest"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
   readonly "node_cov": __TablesBase["nodeCov"];
+  /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */
+  readonly "node_summary": __TablesBase["nodeSummary"];
+  /** @deprecated Use `repoIndex` instead. This alias will be removed in the next major version. */
+  readonly "repo_index": __TablesBase["repoIndex"];
 };
 
 /** The tables available in this remote SpacetimeDB module. Each table reference doubles as a query builder. */
