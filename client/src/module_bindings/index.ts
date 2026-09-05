@@ -58,6 +58,7 @@ import AgentSessionRow from "./agent_session_table";
 import EdgeRow from "./edge_table";
 import ExplorationRequestRow from "./exploration_request_table";
 import FrontierRow from "./frontier_table";
+import NewLandRow from "./new_land_table";
 import NodeRow from "./node_table";
 import NodeCovRow from "./node_cov_table";
 import NodeSummaryRow from "./node_summary_table";
@@ -137,6 +138,20 @@ const tablesSchema = __schema({
       { name: 'frontier_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, FrontierRow),
+  newLand: __table({
+    name: 'new_land',
+    indexes: [
+      { accessor: 'key', name: 'new_land_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+      { accessor: 'repo_id', name: 'new_land_repo_id_idx_btree', algorithm: 'btree', columns: [
+        'repoId',
+      ] },
+    ],
+    constraints: [
+      { name: 'new_land_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, NewLandRow),
   node: __table({
     name: 'node',
     indexes: [
@@ -295,6 +310,8 @@ type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "ta
     readonly "agent_session": Omit<typeof tablesSchema.schemaType.tables["agentSession"], "accessorName"> & { readonly accessorName: "agent_session" };
     /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
     readonly "exploration_request": Omit<typeof tablesSchema.schemaType.tables["explorationRequest"], "accessorName"> & { readonly accessorName: "exploration_request" };
+    /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
+    readonly "new_land": Omit<typeof tablesSchema.schemaType.tables["newLand"], "accessorName"> & { readonly accessorName: "new_land" };
     /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
     readonly "node_cov": Omit<typeof tablesSchema.schemaType.tables["nodeCov"], "accessorName"> & { readonly accessorName: "node_cov" };
     /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */
@@ -321,6 +338,7 @@ const REMOTE_MODULE = {
 const tableAccessorAliases = {
   "agent_session": "agentSession",
   "exploration_request": "explorationRequest",
+  "new_land": "newLand",
   "node_cov": "nodeCov",
   "node_summary": "nodeSummary",
   "repo_index": "repoIndex",
@@ -348,6 +366,8 @@ export type DbView = __DbViewBase & {
   readonly "agent_session": __DbViewBase["agentSession"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __DbViewBase["explorationRequest"];
+  /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
+  readonly "new_land": __DbViewBase["newLand"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
   readonly "node_cov": __DbViewBase["nodeCov"];
   /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */
@@ -362,6 +382,8 @@ export type Tables = __TablesBase & {
   readonly "agent_session": __TablesBase["agentSession"];
   /** @deprecated Use `explorationRequest` instead. This alias will be removed in the next major version. */
   readonly "exploration_request": __TablesBase["explorationRequest"];
+  /** @deprecated Use `newLand` instead. This alias will be removed in the next major version. */
+  readonly "new_land": __TablesBase["newLand"];
   /** @deprecated Use `nodeCov` instead. This alias will be removed in the next major version. */
   readonly "node_cov": __TablesBase["nodeCov"];
   /** @deprecated Use `nodeSummary` instead. This alias will be removed in the next major version. */

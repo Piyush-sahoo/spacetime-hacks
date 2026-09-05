@@ -1,6 +1,7 @@
 import { Bot, Radio } from 'lucide-react'
 import { useRoom } from '../lib/room.jsx'
 import { idHex, key, splitQual, num, tsMs } from '../lib/util'
+import { actorLabel, MAIN_COLOR } from '../lib/actors'
 
 /**
  * Who is in the room — humans from `participant`, agents from `agent_session`.
@@ -13,7 +14,10 @@ import { idHex, key, splitQual, num, tsMs } from '../lib/util'
 // Agent sessions accumulate for the life of the module — every heartbeat from
 // every run leaves a row. The rail is about who is working NOW, so it shows the
 // live ones and counts the rest rather than growing without bound on stage.
-const AGENT_CAP = 3
+// Main agent plus up to four coloured subagents is the whole colour key; past
+// that the rail counts the tail rather than growing a wall of near-identical
+// rows nobody can read from the back of the room.
+const AGENT_CAP = 5
 // Same for humans: a demo room collects guests all afternoon and the rail is
 // not a guest book.
 const HUMAN_CAP = 8
@@ -22,8 +26,10 @@ export default function PresenceRail() {
   const { participants, agents, meta, nodeById, covState } = useRoom()
   const online = participants.filter((p) => p.online)
   const liveAgents = agents.filter((a) => a.live)
-  const shownAgents = (liveAgents.length ? liveAgents : agents).slice(0, AGENT_CAP)
-  const otherAgents = agents.length - shownAgents.length
+  const pool = liveAgents.length ? liveAgents : agents
+  const shownAgents = pool.slice(0, AGENT_CAP)
+  const otherAgents = pool.length - shownAgents.length
+  const liveSubs = liveAgents.filter((a) => a.actorId).length
   const shownHumans = participants.slice(0, HUMAN_CAP)
   const otherHumans = participants.length - shownHumans.length
 
@@ -34,42 +40,49 @@ export default function PresenceRail() {
         <span className="mono text-[11.5px] whitespace-nowrap" style={{ color: 'var(--accent)' }}>
           {online.length}&nbsp;human{online.length === 1 ? '' : 's'}
           {liveAgents.length ? ` · ${liveAgents.length}\u00a0agent${liveAgents.length === 1 ? '' : 's'}` : ''}
+          {liveSubs ? ` (${liveSubs}\u00a0sub)` : ''}
         </span>
       </div>
 
       {/* ── agents ─────────────────────────────────────────────────────── */}
       {agents.length > 0 ? (
         <ul className="flex lg:flex-col gap-2 mb-3 overflow-x-auto lg:overflow-visible no-scrollbar -mx-1 px-1">
-          {shownAgents.map((a) => (
-            <li
-              key={key(a.id)}
-              className="flex items-center gap-2.5 shrink-0 lg:shrink rounded-lg px-2.5 py-2 min-w-0"
-              style={{
-                background: a.live ? 'rgba(14,116,144,0.10)' : 'transparent',
-                border: `1px solid ${a.live ? 'rgba(14,116,144,0.32)' : 'var(--line)'}`,
-              }}
-            >
-              <span
-                className="w-6 h-6 rounded-[5px] shrink-0 flex items-center justify-center"
+          {shownAgents.map((a) => {
+            const sub = !!a.actorId
+            const colour = a.color || MAIN_COLOR
+            return (
+              <li
+                key={key(a.id)}
+                className="flex items-center gap-2.5 shrink-0 lg:shrink rounded-lg px-2.5 py-2 min-w-0"
                 style={{
-                  background: a.live ? 'var(--signal-ink)' : 'rgba(22,20,19,0.15)',
-                  color: 'var(--cream)',
+                  // A subagent is indented under the session it inherited, so
+                  // the rail reads as the tree the run actually was.
+                  marginLeft: sub ? 14 : 0,
+                  background: a.live ? `${colour}1a` : 'transparent',
+                  border: `1px solid ${a.live ? `${colour}55` : 'var(--line)'}`,
                 }}
               >
-                <Bot size={13} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13.5px] leading-tight truncate max-w-[170px]" style={{ fontWeight: 600 }}>
-                  {a.agentName || 'agent'}
-                  <span className="micro-label ml-1.5" style={{ color: 'var(--signal-ink)' }}>AGENT</span>
+                <span
+                  className="w-6 h-6 rounded-[5px] shrink-0 flex items-center justify-center"
+                  style={{ background: a.live ? colour : 'rgba(22,20,19,0.15)', color: '#0a0908' }}
+                >
+                  <Bot size={13} />
                 </span>
-                <span className="block mono text-[11px] truncate max-w-[170px]" style={{ color: 'var(--muted)' }}>
-                  {a.live ? `${num(a.touches)} touches` : `idle · ${num(a.touches)} touches`}
-                  {a.session ? ` · ${String(a.session).slice(0, 6)}` : ''}
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] leading-tight truncate max-w-[170px]" style={{ fontWeight: 600 }}>
+                    {sub ? actorLabel(a.actorId) : (a.agentName || 'agent')}
+                    <span className="micro-label ml-1.5" style={{ color: colour }}>
+                      {sub ? 'SUBAGENT' : 'AGENT'}
+                    </span>
+                  </span>
+                  <span className="block mono text-[11px] truncate max-w-[170px]" style={{ color: 'var(--muted)' }}>
+                    {a.live ? `${num(a.touches)} touches` : `idle · ${num(a.touches)} touches`}
+                    {a.parentSession ? ` · ${String(a.parentSession).slice(0, 6)}` : ''}
+                  </span>
                 </span>
-              </span>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       ) : (
         <div
@@ -86,7 +99,7 @@ export default function PresenceRail() {
       )}
 
       {otherAgents > 0 && (
-        <p className="micro-label -mt-1 mb-3">+{otherAgents} EARLIER AGENT SESSION{otherAgents === 1 ? '' : 'S'}</p>
+        <p className="micro-label -mt-1 mb-3">+{otherAgents} MORE AGENT SESSION{otherAgents === 1 ? '' : 'S'}</p>
       )}
 
       {participants.length === 0 && (

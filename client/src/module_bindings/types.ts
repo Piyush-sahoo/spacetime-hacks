@@ -54,6 +54,22 @@ export const Frontier = __t.object("Frontier", {
 });
 export type Frontier = __Infer<typeof Frontier>;
 
+export const NewLand = __t.object("NewLand", {
+  key: __t.string(),
+  repoId: __t.u64(),
+  nodeId: __t.u64(),
+  path: __t.string(),
+  actor: __t.string(),
+  at: __t.timestamp(),
+});
+export type NewLand = __Infer<typeof NewLand>;
+
+export const NewLandSeq = __t.object("NewLandSeq", {
+  repoId: __t.u64(),
+  next: __t.u32(),
+});
+export type NewLandSeq = __Infer<typeof NewLandSeq>;
+
 export const Node = __t.object("Node", {
   id: __t.u64(),
   repoId: __t.u64(),

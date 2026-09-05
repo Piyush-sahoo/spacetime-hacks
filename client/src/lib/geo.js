@@ -440,7 +440,7 @@ export function buildGeography(territory, edges) {
 
   return {
     RMAX, RFILE, R0, maxDepth, ROT, TAU,
-    tree: T, root: ROOT,
+    tree: T, root: ROOT, byFull,
     nLeaf, lx, ly, lr, la, leafFile, leafNode, leafDistrict, leafIndexById,
     files, nFiles,
     skeleton, hairs,
@@ -448,4 +448,66 @@ export function buildGeography(territory, edges) {
     districts,
     pick,
   }
+}
+
+/**
+ * NEW GROUND — territory that was not in the survey when the survey was made.
+ *
+ * A file on a feature branch, a file created ten seconds ago, a file the
+ * indexer never saw: the agent touched it, so it exists, but it has no slot in
+ * the radial tree. Giving it one would mean re-cutting every angular slot in
+ * the map, and the whole point of the survey is that the ground does not move
+ * under the audience while they are watching it.
+ *
+ * So it is surveyed SEPARATELY, in a thin annulus just outside the coastline.
+ * Each parcel is anchored to the deepest district of the existing map its own
+ * directory belongs to — `django/forms/new_widget.py` lands in the `django.forms`
+ * sector, in front of the ground it belongs with — and its exact angle and
+ * radius come from a hash of its own path. That is what makes it stable: a
+ * parcel's position depends on nothing but its own name, so a hundred parcels
+ * can arrive in any order, in any tab, and none of them moves anything —
+ * not the map underneath, and not each other.
+ *
+ * Parcels whose directory matches nothing in the map (a whole new top-level
+ * folder) anchor to the root and scatter around the rim; they get no tether,
+ * because there is nothing to tether them to.
+ *
+ * @param geo    the geography from buildGeography()
+ * @param fresh  [{ nodeId, path, label }] — one parcel per off-map file
+ */
+export function buildNewLand(geo, fresh) {
+  if (!geo || !fresh || !fresh.length) return { n: 0, items: [] }
+  const items = []
+  for (const f of fresh) {
+    const dirs = String(f.path).split('/').slice(0, -1)
+    let ni = geo.root
+    for (let d = dirs.length; d > 0; d -= 1) {
+      const hit = geo.byFull.get(dirs.slice(0, d).join('.'))
+      if (hit !== undefined) { ni = hit; break }
+    }
+    const n = geo.tree[ni]
+    const rooted = ni !== geo.root
+    const h = hash01(f.path)
+    const h2 = hash01(`${f.path}~r`)
+    // Inset from the sector edges so a parcel reads as inside its district.
+    const span = Math.max(0.014, n.a1 - n.a0)
+    const ang = n.a0 + span * (0.10 + 0.80 * h)
+    // A thin band outside the coastline (which ends at 1.03 RMAX) and inside
+    // the default fit (1.10 RMAX), so new land is never off-screen on arrival.
+    const r = geo.RMAX * (1.052 + 0.030 * h2)
+    items.push({
+      nodeId: f.nodeId,
+      path: f.path,
+      label: f.label,
+      district: rooted ? n.full.replace(/\./g, '/') : '',
+      ang,
+      r,
+      x: Math.cos(ang) * r,
+      y: Math.sin(ang) * r,
+      ax: rooted ? Math.cos(ang) * geo.RMAX * 0.995 : 0,
+      ay: rooted ? Math.sin(ang) * geo.RMAX * 0.995 : 0,
+      rooted,
+    })
+  }
+  return { n: items.length, items }
 }

@@ -244,6 +244,40 @@ const node_summary = table(
   }
 );
 
+/**
+ * NEW TERRITORY — a path the agent touched that the indexed tree does not hold.
+ *
+ * One map per repo, built from the default branch. A file that only exists on a
+ * feature branch, or was created five minutes ago, or that the indexer simply
+ * missed, resolves to nothing — and `report_touch` used to record the miss as
+ * `node_id = 0`, which is countable but invisible. Instead it now MINTS a node
+ * for that path (kind `NewLand`) so the work shows up on the map as new ground.
+ *
+ * This table is the idempotency key: `<repo_id>|<path>` -> the node that was
+ * minted for it, so the same path touched a thousand times mints exactly once
+ * even if the resolver's memo was dropped.
+ */
+const new_land = table(
+  { name: 'new_land', public: true },
+  {
+    key: t.string().primaryKey(), // `${repo_id}|${path}`
+    repo_id: t.u64().index('btree'),
+    node_id: t.u64(),
+    path: t.string(),
+    actor: t.string(), // who found it first
+    at: t.timestamp(),
+  }
+);
+
+/** Ordinal counter for minted new-land ids, one row per repo. Private. */
+const new_land_seq = table(
+  { name: 'new_land_seq', public: false },
+  {
+    repo_id: t.u64().primaryKey(),
+    next: t.u32(),
+  }
+);
+
 const spacetimedb = schema({
   repo,
   node,
@@ -259,6 +293,8 @@ const spacetimedb = schema({
   path_cache,
   repo_index,
   node_summary,
+  new_land,
+  new_land_seq,
 });
 export default spacetimedb;
 
@@ -794,6 +830,115 @@ function resolvePaths(
   return out;
 }
 
+/**
+ * THE ACTOR — which agent, of the several sharing one session, did this.
+ *
+ * Subagents INHERIT the parent's `session_id`; what distinguishes them is the
+ * `agent_id` the hook payload carries only for a subagent. So the actor cannot
+ * be read off `session` — it has to be reported.
+ *
+ * It is carried INSIDE the existing `agent_name` argument rather than as a new
+ * reducer parameter: `claude` is the main agent, `claude/<actor>` is a subagent.
+ * That keeps `report_touch`'s signature byte-identical, so every plugin already
+ * installed out there keeps working and reports as the main agent — a new
+ * parameter would have broken all of them until each one was updated.
+ *
+ * `<actor>` is opaque and stable per subagent. The plugin sends
+ * `<agent_type>~<agent_id[:8]>` when it knows the type, and `<agent_id[:8]>`
+ * when it does not; nothing here parses it, it is only ever an identity.
+ */
+function splitActor(agent_name: string): { base: string; actor: string } {
+  const s = agent_name.trim();
+  const i = s.indexOf('/');
+  if (i < 0) return { base: s.length > 0 ? s : 'claude', actor: '' };
+  const base = s.slice(0, i).trim();
+  const actor = s.slice(i + 1).trim().slice(0, 48);
+  return { base: base.length > 0 ? base : 'claude', actor };
+}
+
+/**
+ * The key a report is filed under: the session for the main agent, and
+ * `session/actor` for a subagent.
+ *
+ * This rides in the EXISTING `session` string columns (`touch.session`,
+ * `node_cov.last_session`, `agent_session.session`) rather than in new columns,
+ * for the same reason the actor rides in `agent_name`: adding a column to a
+ * populated table is a destructive republish, and the loaded graphs are not
+ * expendable. A plain session with no `/` is the main agent, which is exactly
+ * what every row written before today already says.
+ *
+ * It also gives the presence rail its tree for free: the part before the `/` is
+ * the parent session every subagent under it shares.
+ */
+function presenceKey(session: string, actor: string): string {
+  return actor.length > 0 ? `${session}/${actor}` : session;
+}
+
+/** Node kind for territory that exists because an agent walked onto it. */
+const NEW_LAND_KIND = 'NewLand';
+/** Fuse: a repo can grow this much new ground before the map stops accepting it. */
+const MAX_NEW_LAND = 512;
+
+/** A path that names a FILE — has an extension on its last segment. */
+function newLandable(path: string): boolean {
+  const segs = path.split('/');
+  const base = segs[segs.length - 1];
+  if (base.length === 0) return false;
+  const dot = base.lastIndexOf('.');
+  return dot > 0 && dot < base.length - 1;
+}
+
+/**
+ * Put an unresolvable path on the map as new ground, and hand back its node id.
+ *
+ * Ids come from the TOP of the repo's reserved band, counting DOWN, while
+ * `index_repo` allots ordinals 1..N counting UP from the bottom. A billion ids
+ * separate them against fuses of 4,000 and 512, so minted land can never
+ * collide with indexed land even after the repo is re-indexed.
+ *
+ * Returns 0n when the path cannot be placed — the `node_id = 0` sentinel still
+ * means exactly what it always meant.
+ */
+function mintNewLand(
+  ctx: Ctx,
+  repo_id: bigint,
+  path: string,
+  actor: string,
+  now: Ctx['timestamp']
+): bigint {
+  if (!newLandable(path)) return 0n;
+  const ck = `${repo_id}|${path}`;
+  const seen = ctx.db.new_land.key.find(ck);
+  if (seen) return seen.node_id;
+
+  const seq = ctx.db.new_land_seq.repo_id.find(repo_id);
+  const next = seq ? seq.next : 0;
+  if (next >= MAX_NEW_LAND) return 0n;
+
+  const id = idBand(repo_id) + INDEX_ID_STRIDE - 1n - BigInt(next);
+  if (ctx.db.node.id.find(id)) return 0n; // never take ground that is already someone's
+
+  const segs = path.split('/');
+  ctx.db.node.insert({
+    id,
+    repo_id,
+    kind: NEW_LAND_KIND,
+    name: segs[segs.length - 1],
+    qual: qualForPath(path),
+  });
+  ctx.db.new_land.insert({ key: ck, repo_id, node_id: id, path, actor, at: now });
+  if (seq) ctx.db.new_land_seq.repo_id.update({ repo_id, next: next + 1 });
+  else ctx.db.new_land_seq.insert({ repo_id, next: 1 });
+
+  // The resolver memo has just cached "nothing" for this path. Teach it the
+  // answer, or every later touch of the same file re-scans and misses again.
+  const cached = ctx.db.path_cache.key.find(ck);
+  if (cached) ctx.db.path_cache.key.update({ ...cached, node_ids: [id] });
+  else ctx.db.path_cache.insert({ key: ck, repo_id, node_ids: [id] });
+
+  return id;
+}
+
 /** Upsert the agent's presence row. Returns nothing; safe to call constantly. */
 function bumpSession(
   ctx: Ctx,
@@ -864,8 +1009,12 @@ export const report_touch = spacetimedb.reducer(
       paths.push(s);
       if (paths.length >= MAX_PATHS_PER_CALL) break;
     }
+    // Which agent this is, and the key its reports are filed under.
+    const { actor } = splitActor(agent_name);
+    const skey = presenceKey(session, actor);
+
     if (paths.length === 0) {
-      bumpSession(ctx, session, agent_name, repo_id, 0);
+      bumpSession(ctx, skey, agent_name, repo_id, 0);
       return;
     }
 
@@ -873,7 +1022,13 @@ export const report_touch = spacetimedb.reducer(
     const resolved = resolvePaths(ctx, repo_id, paths);
 
     for (const p of paths) {
-      const ids = resolved.get(p) ?? [];
+      let ids = resolved.get(p) ?? [];
+      // Off the map: a feature-branch file, a brand-new one, or one the indexer
+      // missed. Mint it as new territory rather than losing it to the sentinel.
+      if (ids.length === 0) {
+        const minted = mintNewLand(ctx, repo_id, p, actor, now);
+        if (minted !== 0n) ids = [minted];
+      }
 
       ctx.db.touch.insert({
         id: 0n,
@@ -881,7 +1036,7 @@ export const report_touch = spacetimedb.reducer(
         node_id: ids.length > 0 ? ids[0] : 0n,
         path: p,
         tool,
-        session,
+        session: skey,
         agent_name,
         at: now,
       });
@@ -893,7 +1048,7 @@ export const report_touch = spacetimedb.reducer(
             ...existing,
             touches: existing.touches + 1,
             last_tool: tool,
-            last_session: session,
+            last_session: skey,
             explored: true,
             last_at: now,
           });
@@ -903,7 +1058,7 @@ export const report_touch = spacetimedb.reducer(
             repo_id,
             touches: 1,
             last_tool: tool,
-            last_session: session,
+            last_session: skey,
             explored: true,
             last_at: now,
           });
@@ -911,7 +1066,7 @@ export const report_touch = spacetimedb.reducer(
       }
     }
 
-    bumpSession(ctx, session, agent_name, repo_id, paths.length);
+    bumpSession(ctx, skey, agent_name, repo_id, paths.length);
   }
 );
 
@@ -920,7 +1075,8 @@ export const agent_heartbeat = spacetimedb.reducer(
   { name: 'agent_heartbeat' },
   { session: t.string(), agent_name: t.string(), repo_id: t.u64() },
   (ctx, { session, agent_name, repo_id }) => {
-    bumpSession(ctx, session, agent_name, repo_id, 0);
+    const { actor } = splitActor(agent_name);
+    bumpSession(ctx, presenceKey(session, actor), agent_name, repo_id, 0);
   }
 );
 
@@ -991,6 +1147,13 @@ export const reset_coverage = spacetimedb.reducer(
     ctx.db.touch.repo_id.delete(repo_id);
     ctx.db.path_cache.repo_id.delete(repo_id);
     ctx.db.exploration_request.repo_id.delete(repo_id);
+    // New ground was discovered BY the coverage feed, so it goes back with it.
+    // Only the minted nodes are removed; indexed and seeded ones are untouched.
+    const minted: bigint[] = [];
+    for (const r of ctx.db.new_land.repo_id.filter(repo_id)) minted.push(r.node_id);
+    ctx.db.new_land.repo_id.delete(repo_id);
+    ctx.db.new_land_seq.repo_id.delete(repo_id);
+    for (const id of minted) ctx.db.node.id.delete(id);
     const ids: bigint[] = [];
     for (const s of ctx.db.agent_session.iter()) {
       if (s.repo_id === repo_id) ids.push(s.id);
@@ -1199,6 +1362,10 @@ export const indexRepo = spacetimedb.procedure(
         tx.db.node.repo_id.delete(repo_id);
         tx.db.edge.repo_id.delete(repo_id);
         tx.db.path_cache.repo_id.delete(repo_id);
+        // Minted land pointed at nodes that just went away; its ordinals are
+        // free again and the agent will rediscover whatever is still off-map.
+        tx.db.new_land.repo_id.delete(repo_id);
+        tx.db.new_land_seq.repo_id.delete(repo_id);
       }
     });
     if (refused.length > 0) return refused;

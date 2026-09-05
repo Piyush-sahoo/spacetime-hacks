@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Compass, Crosshair, Loader2, Minus, Play, Plus } from 'lucide-react'
 import { useRoom } from '../lib/room.jsx'
 import { key } from '../lib/util'
+import { SLOT_RGB, MAIN_COLOR, actorShort, MAX_ACTOR_COLORS } from '../lib/actors'
 
 /**
  * THE SURVEY — a navigable survey plate of the repo.
@@ -13,9 +14,13 @@ import { key } from '../lib/util'
  *
  * Colour is the only thing that ever moves:
  *   dark     — never touched
- *   ember    — the agent has been here
+ *   ember    — the MAIN agent has been here
+ *   lime / periwinkle / violet / magenta — a SUBAGENT has, one hue each, so
+ *              several agents working at once are several colours spreading at
+ *              once rather than one indistinguishable glow
  *   cyan     — the backwards walk is painting this hop
  *   amber    — a human asked the agent to go look
+ *   dashed   — new ground: a file the survey never had, outside the coastline
  *
  * Every colour comes from a subscription row. There is no optimistic local
  * state, which is why a second tab that clicked nothing paints the same map.
@@ -141,8 +146,10 @@ export default function Survey() {
   const {
     geography, territory, coverage, requestsByFile, requestExploration, canRequest,
     covState, covError, startWalk, isMock, walk, frontier, walkDone, nodeById,
+    newLand, actors,
   } = useRoom()
 
+  const [pickedNew, setPickedNew] = useState(null)
   const [wrapRef, box] = useBox()
   const canvasRef = useRef(null)
   const cam = useRef({ x: 0, y: 0, k: 1, fitted: false })
@@ -249,7 +256,7 @@ export default function Survey() {
     if (geography && box.w && !cam.current.fitted) fit(box.w, box.h, geography, false)
   }, [geography, box, fit])
 
-  useEffect(() => { wake() }, [box, coverage, requestsByFile, hopByNode, picked, wake])
+  useEffect(() => { wake() }, [box, coverage, requestsByFile, hopByNode, picked, newLand, wake])
 
   // A `done` ring is static. Only an open request actually animates, so only an
   // open request earns a repaint every frame.
@@ -300,6 +307,20 @@ export default function Survey() {
     const { x, y } = screenToWorld(sx, sy)
     const lod = lodFor(cam.current.k * geo.RMAX)
 
+    // New ground sits outside the coastline, so it is tested first — nothing
+    // else can be out there and a parcel is small.
+    const parcels = newLand?.items
+    if (parcels && parcels.length && Math.hypot(x, y) > geo.RMAX * 1.0) {
+      const rr = Math.max(geo.RMAX * 0.012, 14 / cam.current.k)
+      let best = -1
+      let bestD = rr * rr
+      for (let i = 0; i < parcels.length; i += 1) {
+        const d = (parcels[i].x - x) ** 2 + (parcels[i].y - y) ** 2
+        if (d < bestD) { bestD = d; best = i }
+      }
+      if (best >= 0) return { kind: 'new', ni: best }
+    }
+
     if (lod.fileDots) {
       const r = Math.min(geo.RMAX * 0.05, 18 / cam.current.k)
       const leaf = geo.pick(x, y, r)
@@ -331,7 +352,7 @@ export default function Survey() {
       }
     }
     return hit ? { kind: 'district', d: hit } : null
-  }, [geography, screenToWorld])
+  }, [geography, screenToWorld, newLand])
 
   const flyToDistrict = useCallback((d) => {
     const geo = geography
@@ -419,11 +440,13 @@ export default function Survey() {
         ? {
           kind: hit.kind,
           fi: hit.kind === 'file' ? hit.fi : null,
+          ni: hit.kind === 'new' ? hit.ni : null,
           name: hit.kind === 'district' ? hit.d.name : null,
           sx, sy,
         }
         : null
       const same = (hoverRef.current?.fi ?? null) === (next?.fi ?? null)
+        && (hoverRef.current?.ni ?? null) === (next?.ni ?? null)
         && (hoverRef.current?.name ?? null) === (next?.name ?? null)
       hoverRef.current = next
       if (!same) wake()
@@ -437,7 +460,8 @@ export default function Survey() {
       if (e.button === 0 && !wasDrag && pointers.current.size === 0) {
         const rect = el.getBoundingClientRect()
         const hit = hitAt(e.clientX - rect.left, e.clientY - rect.top)
-        if (hit?.kind === 'file') onFile(hit.fi)
+        if (hit?.kind === 'file') { setPickedNew(null); onFile(hit.fi) }
+        else if (hit?.kind === 'new') { setPickedNew(hit.ni); setPicked(null) }
         else if (hit?.kind === 'district') flyToDistrict(hit.d)
       }
       dragging.current = false
@@ -536,7 +560,7 @@ export default function Survey() {
         if (pulsing) lastPulse = now
         const t0 = performance.now()
         animRef.current = !!drawSurvey(ctx, {
-          geo: geography, box, cam: c, coverage, requestsByFile, hopByNode, maxHop,
+          geo: geography, box, cam: c, coverage, requestsByFile, hopByNode, maxHop, newLand,
           walkActive: !!walk && !walkDone,
           ignite: ignite.current, hover: hoverRef.current, picked, now,
           reduce: reduceMotion.current,
@@ -580,9 +604,11 @@ export default function Survey() {
       rafRef.current = 0
       paintRef.current = null
     }
-  }, [geography, box, coverage, requestsByFile, openReqs, hopByNode, maxHop, walk, walkDone, picked])
+  }, [geography, box, coverage, requestsByFile, openReqs, hopByNode, maxHop, walk, walkDone, picked, newLand])
 
   const detail = picked != null ? territory.files[picked] : null
+  const parcel = pickedNew != null ? newLand?.items?.[pickedNew] : null
+  const hoverParcel = hover?.kind === 'new' && hover.ni != null ? newLand?.items?.[hover.ni] : null
   const hoverFile = hover?.kind === 'file' && hover.fi != null ? territory.files[hover.fi] : null
   const litFrac = coverage.totalNodes ? coverage.exploredNodes / coverage.totalNodes : 0
   const walkOrigin = walk ? nodeById(walk.origin) : null
@@ -614,7 +640,7 @@ export default function Survey() {
               : 'branches are folders · filaments are calls that ignore them'}
           </p>
         </div>
-        <Legend walking={!!walk} />
+        <Legend walking={!!walk} actors={actors} newCount={newLand?.n || 0} />
       </div>
 
       <div className="px-2 sm:px-3 pb-2">
@@ -670,6 +696,23 @@ export default function Survey() {
               </div>
             </div>
           )}
+          {hoverParcel && (
+            <div
+              className="absolute pointer-events-none px-2 py-1 rounded-md hidden sm:block"
+              style={{
+                left: Math.min(Math.max(8, hover.sx + 14), Math.max(8, box.w - 240)),
+                top: Math.max(8, hover.sy - 38),
+                background: 'rgba(10,9,8,0.94)',
+                border: '1px dashed rgba(250,249,246,0.4)',
+                zIndex: 8, maxWidth: 248,
+              }}
+            >
+              <div className="mono text-[11px] truncate" style={{ color: 'var(--cream)' }}>{hoverParcel.path}</div>
+              <div className="mono text-[10px]" style={{ color: 'rgba(250,249,246,0.6)' }}>
+                new ground — not in the indexed tree
+              </div>
+            </div>
+          )}
           {hover?.kind === 'district' && (
             <div
               className="absolute pointer-events-none px-2 py-1 rounded-md hidden sm:block"
@@ -720,6 +763,14 @@ export default function Survey() {
           <span className="mono text-[12px] truncate min-w-0" style={{ color: 'var(--ask)' }}>
             asked the agent to explore <strong>{flash}</strong> — every screen in this room sees it
           </span>
+        ) : parcel ? (
+          <span className="min-w-0">
+            <span className="block mono text-[12.5px] truncate" style={{ color: 'var(--cream)' }}>{parcel.path}</span>
+            <span className="block mono text-[11px]" style={{ color: 'rgba(250,249,246,0.5)' }}>
+              new ground · the agent walked onto a file the survey never had
+              {parcel.district ? ` · sits with ${parcel.district}` : ''}
+            </span>
+          </span>
         ) : detail ? (
           <span className="min-w-0">
             <span className="block mono text-[12.5px] truncate" style={{ color: 'var(--cream)' }}>{detail.path}</span>
@@ -740,6 +791,7 @@ export default function Survey() {
         <span className="flex items-center gap-3 shrink-0">
           <span className="mono text-[11.5px] whitespace-nowrap" style={{ color: 'rgba(250,249,246,0.55)' }}>
             {coverage.exploredFiles}/{coverage.totalFiles} files · {(litFrac * 100).toFixed(1)}%
+            {newLand?.n ? ` · +${newLand.n} new` : ''}
           </span>
           {detail && coverage.lit[picked] > 0 && (
             <button
@@ -788,11 +840,27 @@ function Swatch({ color, border, dashed, label }) {
   )
 }
 
-function Legend({ walking }) {
+/**
+ * The legend names the agents, not just the states.
+ *
+ * With several agents on one map the question stopped being "is this lit" and
+ * became "who lit it", so each actor currently working gets its swatch here.
+ * Past four subagents the tail collapses into a single count: five colours is a
+ * key, twelve is confetti, and this has to be readable from the back of a room.
+ */
+function Legend({ walking, actors, newCount }) {
+  const subs = (actors || []).filter((a) => a.actorId)
+  const shown = subs.slice(0, MAX_ACTOR_COLORS)
+  const rest = subs.length - shown.length
   return (
     <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
       <Swatch color="rgba(250,249,246,0.16)" label="DARK" />
-      <Swatch color="rgba(255,116,36,0.95)" label="EXPLORED" />
+      <Swatch color={MAIN_COLOR} label={subs.length ? 'MAIN AGENT' : 'EXPLORED'} />
+      {shown.map((a) => (
+        <Swatch key={a.actorId} color={a.color} label={actorShort(a.actorId).toUpperCase()} />
+      ))}
+      {rest > 0 && <Swatch color="#94a3b8" label={`+${rest} MORE`} />}
+      {newCount > 0 && <Swatch border="rgba(250,249,246,0.75)" dashed label="NEW GROUND" />}
       {walking && <Swatch color="#35d0ff" label="WALK" />}
       <Swatch border="var(--ask)" dashed label="ASKED" />
       <Swatch border="var(--done)" label="REPORTED" />
@@ -805,8 +873,12 @@ function Legend({ walking }) {
 function drawSurvey(ctx, s) {
   const {
     geo, box, cam: c, coverage, requestsByFile, hopByNode, maxHop,
-    walkActive, ignite, hover, picked, now, reduce,
+    walkActive, ignite, hover, picked, now, reduce, newLand,
   } = s
+  // Which agent lit a region -> the colour that region is painted in. Slot 0 is
+  // the main agent's ember, which is exactly what the map has always been.
+  const slotOf = (fi) => coverage.slot ? coverage.slot[fi] : 0
+  const rgbOf = (fi) => SLOT_RGB[slotOf(fi)] || SLOT_RGB[0]
   const dpr = window.devicePixelRatio || 1
   const W = box.w
   const H = box.h
@@ -874,22 +946,38 @@ function drawSurvey(ctx, s) {
   const nD = geo.districts.length
   const distLit = new Float32Array(nD)
   const distTot = new Float32Array(nD)
+  // Which agent owns the most lit ground in each district — the wedge is the
+  // thing you read from across a room, so it takes the majority colour.
+  const distVotes = new Int32Array(nD * SLOT_RGB.length)
   for (let i = 0; i < geo.nLeaf; i += 1) {
     const di = geo.leafDistrict[i]
     if (di < 0) continue
     distTot[di] += 1
-    if (coverage.lit[geo.leafFile[i]] > 0) distLit[di] += 1
+    const fi = geo.leafFile[i]
+    if (coverage.lit[fi] > 0) {
+      distLit[di] += 1
+      distVotes[di * SLOT_RGB.length + slotOf(fi)] += 1
+    }
+  }
+  const distSlot = new Int8Array(nD)
+  for (let i = 0; i < nD; i += 1) {
+    let best = 0
+    for (let sl = 1; sl < SLOT_RGB.length; sl += 1) {
+      if (distVotes[i * SLOT_RGB.length + sl] > distVotes[i * SLOT_RGB.length + best]) best = sl
+    }
+    distSlot[i] = best
   }
   if (lod.wedges) {
     for (let i = 0; i < nD; i += 1) {
       const d = geo.districts[i]
       if (d.depth !== lod.wedges) continue
       const frac = distTot[i] ? distLit[i] / distTot[i] : 0
+      const [wr, wg, wb] = SLOT_RGB[distSlot[i]] || SLOT_RGB[0]
       ctx.beginPath()
       ctx.moveTo(0, 0)
       ctx.arc(0, 0, geo.RMAX * 1.03, d.a0, d.a1, false)
       ctx.closePath()
-      ctx.fillStyle = frac > 0 ? rgba(255, 116, 36, 0.028 + 0.14 * frac) : 'rgba(212,211,203,0.022)'
+      ctx.fillStyle = frac > 0 ? rgba(wr, wg, wb, 0.028 + 0.14 * frac) : 'rgba(212,211,203,0.022)'
       ctx.fill()
       // hairline sector boundary — the ordnance-survey tell
       ctx.strokeStyle = 'rgba(212,211,203,0.075)'
@@ -933,10 +1021,12 @@ function drawSurvey(ctx, s) {
       stroke = rgba(r, g0, b, walkActive ? 0.6 : 0.3)
       width = px(1.2)
     } else if (litS && litD) {
-      stroke = 'rgba(255,116,36,0.30)'
+      const [fr, fg, fb] = rgbOf(fiS)
+      stroke = rgba(fr, fg, fb, 0.30)
       width = px(1.0)
     } else if (litS || litD) {
-      stroke = 'rgba(255,116,36,0.125)'
+      const [fr, fg, fb] = rgbOf(litS ? fiS : fiD)
+      stroke = rgba(fr, fg, fb, 0.125)
       width = px(0.8)
     } else {
       stroke = 'rgba(226,222,212,0.042)'
@@ -1006,7 +1096,9 @@ function drawSurvey(ctx, s) {
         fill = rgba(cr, cg, cb, walkActive ? 0.95 : 0.7)
         r = px(2.6)
       } else if (explored) {
-        fill = 'rgba(255,124,44,0.95)'
+        const sl = coverage.slotByNode?.get(nid) ?? slotOf(fi)
+        const [sr, sg, sb] = SLOT_RGB[sl] || SLOT_RGB[0]
+        fill = rgba(sr, sg, sb, 0.95)
       } else {
         fill = 'rgba(226,222,212,0.17)'
       }
@@ -1040,15 +1132,16 @@ function drawSurvey(ctx, s) {
       const t0 = ignite.get(fi)
       const burn = !reduce && t0 !== undefined && now - t0 < IGNITE_MS ? 1 - (now - t0) / IGNITE_MS : 0
 
+      const [ar, ag, ab] = rgbOf(fi)
       if (lit > 0) {
         ctx.beginPath()
         ctx.arc(f.gx, f.gy, px(6 + 5 * intensity + 14 * burn * burn), 0, TAU)
-        ctx.fillStyle = rgba(255, 116, 36, 0.05 + 0.09 * intensity + 0.22 * burn)
+        ctx.fillStyle = rgba(ar, ag, ab, 0.05 + 0.09 * intensity + 0.22 * burn)
         ctx.fill()
       }
       ctx.beginPath()
       ctx.arc(f.gx, f.gy, px(lit ? 2.9 + 1.7 * intensity : 2.0), 0, TAU)
-      ctx.fillStyle = lit ? rgba(255, 124, 44, 0.6 + 0.4 * intensity) : 'rgba(226,222,212,0.12)'
+      ctx.fillStyle = lit ? rgba(ar, ag, ab, 0.6 + 0.4 * intensity) : 'rgba(226,222,212,0.12)'
       ctx.fill()
 
       if (st) {
@@ -1081,6 +1174,67 @@ function drawSurvey(ctx, s) {
         ctx.strokeStyle = isPick ? '#faf9f6' : 'rgba(250,249,246,0.6)'
         ctx.lineWidth = px(1.4)
         ctx.beginPath(); ctx.arc(f.gx, f.gy, px(isPick ? 12 : 9), 0, TAU); ctx.stroke()
+      }
+    }
+  }
+
+  // ── new ground, in its own annulus outside the coastline ─────────────────
+  //
+  // Drawn as an OUTLINED, HATCHED parcel rather than as more coastline, so it
+  // never passes for surveyed territory: this is ground the map did not have
+  // when the map was made. Its fill is still the colour of whichever agent
+  // walked onto it, so "a subagent just found a file nobody had indexed" reads
+  // as one glance. A dashed tether runs back to the district it belongs to.
+  const parcels = newLand?.items
+  if (parcels && parcels.length) {
+    const hoverNi = hover?.kind === 'new' ? hover.ni : null
+    for (let i = 0; i < parcels.length; i += 1) {
+      const q = parcels[i]
+      if (!inView(q.x, q.y, 60)) continue
+      const sl = coverage.slotByNode?.get(q.nodeId) ?? 0
+      const [nr, ng, nb] = SLOT_RGB[sl] || SLOT_RGB[0]
+      const R = px(5.4)
+
+      if (q.rooted) {
+        ctx.setLineDash([px(2.6), px(3.2)])
+        ctx.strokeStyle = rgba(nr, ng, nb, 0.30)
+        ctx.lineWidth = px(0.8)
+        ctx.beginPath(); ctx.moveTo(q.ax, q.ay); ctx.lineTo(q.x, q.y); ctx.stroke()
+        ctx.setLineDash([])
+      }
+
+      // hatch, clipped to the parcel — the surveyor's mark for unmapped ground
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(q.x, q.y - R); ctx.lineTo(q.x + R, q.y)
+      ctx.lineTo(q.x, q.y + R); ctx.lineTo(q.x - R, q.y)
+      ctx.closePath()
+      ctx.fillStyle = rgba(nr, ng, nb, 0.16)
+      ctx.fill()
+      ctx.clip()
+      ctx.strokeStyle = rgba(nr, ng, nb, 0.55)
+      ctx.lineWidth = px(0.7)
+      for (let h = -2; h <= 2; h += 1) {
+        ctx.beginPath()
+        ctx.moveTo(q.x - R + h * R * 0.5, q.y - R)
+        ctx.lineTo(q.x + R + h * R * 0.5, q.y + R)
+        ctx.stroke()
+      }
+      ctx.restore()
+
+      ctx.setLineDash([px(2.4), px(2.0)])
+      ctx.strokeStyle = rgba(nr, ng, nb, 0.95)
+      ctx.lineWidth = px(1.25)
+      ctx.beginPath()
+      ctx.moveTo(q.x, q.y - R); ctx.lineTo(q.x + R, q.y)
+      ctx.lineTo(q.x, q.y + R); ctx.lineTo(q.x - R, q.y)
+      ctx.closePath(); ctx.stroke()
+      ctx.setLineDash([])
+
+      if (hoverNi === i) {
+        ctx.strokeStyle = 'rgba(250,249,246,0.75)'
+        ctx.lineWidth = px(1.3)
+        ctx.beginPath(); ctx.arc(q.x, q.y, px(10), 0, TAU); ctx.stroke()
       }
     }
   }
@@ -1125,8 +1279,10 @@ function drawSurvey(ctx, s) {
         ctx.lineWidth = major ? 3.5 : 2.8
         ctx.strokeStyle = 'rgba(10,9,8,0.92)'
         ctx.strokeText(text, sx, sy)
+        const [lr2, lg2, lb2] = SLOT_RGB[distSlot[i]] || SLOT_RGB[0]
         ctx.fillStyle = frac > 0.02
-          ? rgba(255, 176, 116, (major ? 0.46 : 0.34) + 0.46 * Math.min(1, frac * 2))
+          ? rgba(Math.min(255, lr2 + 40), Math.min(255, lg2 + 40), Math.min(255, lb2 + 40),
+            (major ? 0.46 : 0.34) + 0.46 * Math.min(1, frac * 2))
           : major ? 'rgba(226,222,212,0.46)' : 'rgba(226,222,212,0.30)'
         ctx.fillText(text, sx, sy)
       }
@@ -1146,9 +1302,29 @@ function drawSurvey(ctx, s) {
       ctx.lineWidth = 3
       ctx.strokeStyle = 'rgba(10,9,8,0.9)'
       ctx.strokeText(f.label, sx, sy)
-      ctx.fillStyle = coverage.lit[fi] ? 'rgba(255,186,132,0.88)' : 'rgba(226,222,212,0.46)'
+      if (coverage.lit[fi]) {
+        const [tr, tg, tb] = rgbOf(fi)
+        ctx.fillStyle = rgba(Math.min(255, tr + 50), Math.min(255, tg + 50), Math.min(255, tb + 50), 0.9)
+      } else {
+        ctx.fillStyle = 'rgba(226,222,212,0.46)'
+      }
       ctx.fillText(f.label, sx, sy)
       drawn += 1
+    }
+  }
+
+  if (lod.fileLabels && parcels && parcels.length) {
+    ctx.font = '10px "Geist Mono", ui-monospace, monospace'
+    for (const q of parcels) {
+      const out = 1 + 17 / (q.r || geo.RMAX)
+      const [sx, sy] = toS(q.x * out, q.y * out)
+      if (sx < 4 || sx > W - 4 || sy < 8 || sy > H - 8) continue
+      if (!claim(sx, sy, ctx.measureText(q.label).width / 2 + 4)) continue
+      ctx.lineWidth = 3
+      ctx.strokeStyle = 'rgba(10,9,8,0.9)'
+      ctx.strokeText(q.label, sx, sy)
+      ctx.fillStyle = 'rgba(250,249,246,0.82)'
+      ctx.fillText(q.label, sx, sy)
     }
   }
 

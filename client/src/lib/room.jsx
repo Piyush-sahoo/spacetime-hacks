@@ -6,8 +6,9 @@ import { connectLive } from './live'
 import { connectMock } from './mock'
 import { ROOM_SLUG, WALK_K, STEP_MS, STALL_TAKEOVER_MS } from './config'
 import { key, idHex, cmpBig, asBig, tsMs } from './util'
-import { buildTerritory } from './territory'
-import { buildGeography } from './geo'
+import { buildTerritory, NEW_LAND_KIND } from './territory'
+import { buildGeography, buildNewLand } from './geo'
+import { assignSlots, splitSession, OTHER_SLOT, slotColor } from './actors'
 
 // How recently an agent_session must have reported to count as working now.
 const AGENT_LIVE_MS = 120000
@@ -117,13 +118,18 @@ export function RoomProvider({ children }) {
     if (!api.has?.('node_cov')) { setCovState('absent'); return }
     stage3Ref.current = rid
     setCovState('connecting')
+    // `new_land` landed after the coverage tables did, so it is asked for only
+    // when the deployed module actually has it — a query for a table that is
+    // not there would take the whole coverage subscription down with it.
+    const queries = [
+      `SELECT * FROM node_cov WHERE repo_id = ${rid}`,
+      `SELECT * FROM exploration_request WHERE repo_id = ${rid}`,
+      `SELECT * FROM agent_session WHERE repo_id = ${rid}`,
+      `SELECT * FROM touch WHERE repo_id = ${rid}`,
+    ]
+    if (api.has?.('new_land')) queries.push(`SELECT * FROM new_land WHERE repo_id = ${rid}`)
     api.subscribe(
-      [
-        `SELECT * FROM node_cov WHERE repo_id = ${rid}`,
-        `SELECT * FROM exploration_request WHERE repo_id = ${rid}`,
-        `SELECT * FROM agent_session WHERE repo_id = ${rid}`,
-        `SELECT * FROM touch WHERE repo_id = ${rid}`,
-      ],
+      queries,
       () => setCovState('live'),
       (msg) => { stage3Ref.current = null; setCovState('absent'); setCovError(msg) }
     )
@@ -149,49 +155,83 @@ export function RoomProvider({ children }) {
       .sort((a, b) => (b.online === a.online ? String(a.name).localeCompare(String(b.name)) : b.online ? 1 : -1))
   }, [v, repo]) // eslint-disable-line
 
-  const nodes = useMemo(() => store.rows('node'), [v]) // eslint-disable-line
+  // Nodes come in two kinds: the SURVEY (seeded or indexed, the ground the map
+  // is cut from) and NEW LAND (minted by report_touch for a path the survey
+  // does not hold). They are split here, once, because the survey's geometry
+  // must be a pure function of the survey — a new parcel arriving must not be
+  // able to change a single angle of it.
+  const nodeSplit = useMemo(() => {
+    const all = store.rows('node')
+    const base = []
+    for (const n of all) if (n.kind !== NEW_LAND_KIND) base.push(n)
+    return { all, base }
+  }, [v]) // eslint-disable-line
+  const nodes = nodeSplit.all
 
   // ── coverage: the map ─────────────────────────────────────────────────────
   // The territory is derived from `node` alone, so the geography is fixed the
   // moment the graph loads. Coverage then only ever changes colour — nothing
   // reflows under the audience while the agent works.
-  const territory = useMemo(() => buildTerritory(nodes), [nodes.length]) // eslint-disable-line
+  const territory = useMemo(() => buildTerritory(nodeSplit.base), [nodeSplit.base.length]) // eslint-disable-line
 
   const covRows = useMemo(() => store.rows('node_cov'), [v]) // eslint-disable-line
+
+  // Every agent that has ever reported into this room, in the order the server
+  // first saw it. Sorting by the autoInc row id — not by name, not by arrival
+  // over the wire — is what makes the colour assignment identical in every tab.
+  const sessionRows = useMemo(() => {
+    const rid = repo ? key(repo.id) : null
+    return store.rows('agent_session')
+      .filter((a) => !rid || key(a.repoId) === rid)
+      .sort((a, b) => cmpBig(a.id, b.id))
+  }, [v, repo]) // eslint-disable-line
+
+  /** actor id -> colour slot. Slot 0 is the main agent and is never in here. */
+  const actorSlots = useMemo(() => assignSlots(sessionRows), [sessionRows])
+
+  const slotOfSession = useCallback((composite) => {
+    const { actor } = splitSession(composite)
+    if (!actor) return 0
+    return actorSlots.get(actor) ?? OTHER_SLOT
+  }, [actorSlots])
 
   /**
    * Per-file coverage rolled up from node_cov. `lit` is how many of a file's
    * nodes have been touched; `at` is the newest touch in it, which is what the
-   * map uses to bloom a region the instant it lights.
+   * map uses to bloom a region the instant it lights; `slot` is WHICH AGENT
+   * touched it last, which is what the map paints it in.
    */
   const coverage = useMemo(() => {
     const files = territory.files
     const lit = new Int32Array(files.length)
     const at = new Float64Array(files.length)
     const tool = new Array(files.length).fill('')
+    const slot = new Int8Array(files.length)
+    const slotByNode = new Map()
+    const exploredIds = new Set()
     let exploredNodes = 0
     for (const c of covRows) {
       if (!c.explored) continue
       exploredNodes += 1
-      const fi = territory.byNode.get(key(c.nodeId))
+      const nid = key(c.nodeId)
+      exploredIds.add(nid)
+      const sl = slotOfSession(c.lastSession)
+      slotByNode.set(nid, sl)
+      const fi = territory.byNode.get(nid)
       if (fi === undefined) continue
       lit[fi] += 1
       const ms = tsMs(c.lastAt)
-      if (ms > at[fi]) { at[fi] = ms; tool[fi] = c.lastTool || '' }
+      if (ms > at[fi]) { at[fi] = ms; tool[fi] = c.lastTool || ''; slot[fi] = sl }
     }
     let exploredFiles = 0
     for (let i = 0; i < lit.length; i += 1) if (lit[i] > 0) exploredFiles += 1
-    const exploredIds = new Set()
-    for (const c of covRows) {
-      if (c.explored) exploredIds.add(key(c.nodeId))
-    }
     return {
-      lit, at, tool, exploredNodes, exploredFiles, exploredIds,
+      lit, at, tool, slot, slotByNode, exploredNodes, exploredFiles, exploredIds,
       totalNodes: territory.total,
       totalFiles: files.length,
       unresolved: covRows.length - exploredNodes,
     }
-  }, [covRows, territory])
+  }, [covRows, territory, slotOfSession])
 
   // Geography is a pure function of the graph. Recompute only when the graph
   // itself changes — never on a coverage tick, or the ground would move.
@@ -200,6 +240,29 @@ export function RoomProvider({ children }) {
     if (!territory.files.length) return null
     return buildGeography(territory, store.rows('edge'))
   }, [territory, edgeN]) // eslint-disable-line
+
+  // ── new ground ────────────────────────────────────────────────────────────
+  // Off-map files the agent walked onto. They are surveyed in their own annulus
+  // outside the coastline, anchored to the district they belong to and placed
+  // by a hash of their own path — so a parcel arriving moves nothing, not the
+  // map beneath it and not the parcels beside it.
+  const freshRows = useMemo(() => store.rows('new_land'), [v]) // eslint-disable-line
+  const fresh = useMemo(() => {
+    const rid = repo ? key(repo.id) : null
+    return freshRows
+      .filter((r) => !rid || key(r.repoId) === rid)
+      .map((r) => ({
+        nodeId: key(r.nodeId),
+        path: String(r.path || ''),
+        label: String(r.path || '').split('/').pop(),
+      }))
+      .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  }, [freshRows, repo])
+
+  const newLand = useMemo(
+    () => buildNewLand(geography, fresh),
+    [geography, fresh.length] // eslint-disable-line
+  )
 
   const touches = useMemo(
     () => [...store.rows('touch')].sort((a, b) => tsMs(b.at) - tsMs(a.at)).slice(0, 28),
@@ -235,14 +298,66 @@ export function RoomProvider({ children }) {
     return () => clearInterval(t)
   }, [])
 
+  // The rail shows a TREE, not a list: a main agent, and under it the subagents
+  // that inherited its session. Both facts are read straight off the composite
+  // key the module writes, so no extra table and no extra round trip.
   const agents = useMemo(() => {
-    const rid = repo ? key(repo.id) : null
     const now = Date.now()
-    return store.rows('agent_session')
-      .filter((a) => !rid || key(a.repoId) === rid)
-      .map((a) => ({ ...a, live: !!a.online && now - tsMs(a.lastAt) < AGENT_LIVE_MS }))
-      .sort((a, b) => (b.live === a.live ? tsMs(b.lastAt) - tsMs(a.lastAt) : b.live ? 1 : -1))
-  }, [v, repo, tick]) // eslint-disable-line
+    const rows = sessionRows.map((a) => {
+      const { session, actor } = splitSession(a.session)
+      const slot = actor ? (actorSlots.get(actor) ?? OTHER_SLOT) : 0
+      return {
+        ...a,
+        live: !!a.online && now - tsMs(a.lastAt) < AGENT_LIVE_MS,
+        actorId: actor,
+        parentSession: session,
+        slot,
+        color: slotColor(slot),
+        ms: tsMs(a.lastAt),
+      }
+    })
+    // Group by the session every subagent shares with its parent, newest first,
+    // and keep the parent at the head of its own group.
+    const groups = new Map()
+    for (const r of rows) {
+      let g = groups.get(r.parentSession)
+      if (!g) { g = { key: r.parentSession, ms: 0, live: false, rows: [] }; groups.set(r.parentSession, g) }
+      g.rows.push(r)
+      if (r.ms > g.ms) g.ms = r.ms
+      if (r.live) g.live = true
+    }
+    const out = []
+    for (const g of [...groups.values()].sort((a, b) => (b.live === a.live ? b.ms - a.ms : b.live ? 1 : -1))) {
+      g.rows.sort((a, b) => (!a.actorId ? -1 : !b.actorId ? 1 : b.ms - a.ms))
+      for (const r of g.rows) out.push(r)
+    }
+    return out
+  }, [sessionRows, actorSlots, tick]) // eslint-disable-line
+
+  /**
+   * One entry per DISTINCT actor — what the legend reads.
+   *
+   * A run leaves an `agent_session` row behind forever, so showing every actor
+   * that ever reported would fill the legend with ghosts. Live actors win; only
+   * when nothing at all is live does it fall back to the most recent ones, so
+   * the legend is never empty while there is lit ground to explain.
+   */
+  const actors = useMemo(() => {
+    const roll = (rows) => {
+      const seen = new Map()
+      for (const a of rows) {
+        const e = seen.get(a.actorId)
+        if (e) { e.touches += Number(a.touches || 0); continue }
+        seen.set(a.actorId, {
+          actorId: a.actorId, slot: a.slot, color: a.color,
+          touches: Number(a.touches || 0), live: a.live,
+        })
+      }
+      return [...seen.values()].sort((x, y) => (!x.actorId ? -1 : !y.actorId ? 1 : x.slot - y.slot))
+    }
+    const live = agents.filter((a) => a.live)
+    return roll(live.length ? live : agents.slice(0, 8))
+  }, [agents])
 
   const requestExploration = useCallback((nodeId, note) => {
     if (!apiRef.current || !repo) return Promise.resolve()
@@ -408,7 +523,8 @@ export function RoomProvider({ children }) {
     isMock: meta.mode === 'mock',
     amDriver,
     // v2 — the coverage loop
-    territory, geography, coverage, requests, requestsByFile, agents, touches,
+    territory, geography, coverage, requests, requestsByFile, agents, actors, touches,
+    newLand,
     requestExploration, covState, covError,
     canRequest: !!apiRef.current?.hasReducer?.('request_exploration'),
   }

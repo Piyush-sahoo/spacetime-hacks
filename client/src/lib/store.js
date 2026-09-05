@@ -5,7 +5,7 @@ import { key, idHex } from './util'
 // separately so that a module that has not published them yet cannot take the
 // walk down with it.
 export const TABLES_V1 = ['repo', 'node', 'edge', 'participant', 'walk', 'frontier', 'verdict']
-export const TABLES_V2 = ['node_cov', 'touch', 'agent_session', 'exploration_request']
+export const TABLES_V2 = ['node_cov', 'touch', 'agent_session', 'exploration_request', 'new_land']
 export const TABLES = [...TABLES_V1, ...TABLES_V2]
 
 // Primary keys per CONTRACT.md. participant is keyed by identity, everything
@@ -14,6 +14,8 @@ function rowKey(table, row) {
   if (table === 'participant') return idHex(row.identity)
   // node_cov is keyed by the node it covers, not by a surrogate id.
   if (table === 'node_cov') return key(row.nodeId ?? row.node_id ?? row.id)
+  // new_land is keyed by `<repo_id>|<path>`, which is already a string.
+  if (table === 'new_land') return String(row.key ?? row.nodeId ?? row.node_id)
   return key(row.id)
 }
 

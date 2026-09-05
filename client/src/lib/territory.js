@@ -57,9 +57,18 @@ export function districtOf(mod) {
  *   `pick` is the node id a click sends to `request_exploration`: the lowest id
  *   in the file, so every tab naming the same region names the same row.
  */
+/**
+ * Nodes minted by `report_touch` for a path the survey does not hold. They are
+ * NOT part of the territory: they get their own annulus outside the coastline
+ * (see buildNewLand in geo.js) precisely so that admitting them cannot re-cut a
+ * single angular slot of the map already on screen.
+ */
+export const NEW_LAND_KIND = 'NewLand'
+
 export function buildTerritory(nodes) {
   const files = new Map()
   for (const n of nodes) {
+    if (n.kind === NEW_LAND_KIND) continue
     const mod = moduleOf(n.qual)
     let f = files.get(mod)
     if (!f) {
