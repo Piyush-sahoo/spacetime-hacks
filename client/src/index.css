@@ -551,3 +551,21 @@ pre {
 }
 .ixrow > .eye:hover { color: var(--ink); border-color: var(--rule); background: var(--face); }
 .ixrow > .eye[aria-pressed="true"] { color: var(--ink); }
+
+/* ── THE BLAST RADIUS ──────────────────────────────────────────────────────
+   Selecting a block dims the whole plate and leaves the files it is directly
+   related to at full strength. It is opacity ONLY: a dimmed block keeps its
+   hit surface, so clicking a dark one still fires the ask.
+   `will-change` is deliberately absent — a layer per block is how you turn a
+   3,000-block map into a swap storm. */
+#world.focus g.node { opacity: .35; }
+#world.focus g.node.sel, #world.focus g.node.rel-on { opacity: 1; }
+#world.focus g.tag { opacity: .28; }
+#world.focus g.tag.on { opacity: 1; }
+#world.focus g.plate { opacity: .4; }
+#world.focus g.routes { opacity: .22; }
+/* The blast list is a dependency list, not a queue: `?` is the ASKED marker and
+   means something else entirely on this panel. */
+.q.blast.out li::before { content: '→'; }
+.q.blast.in li::before { content: '←'; }
+.q.blast.near li::before { content: '·'; }

@@ -10,6 +10,7 @@ import { buildTerritory, NEW_LAND_KIND } from './territory'
 import { buildAtlas, defaultCollapsed } from './iso'
 import { routesFor, timelineOf } from './route'
 import { assignSlots, splitSession, OTHER_SLOT, NEUTRAL_SLOT, slotColor } from './actors'
+import { buildAdjacency } from './blast'
 
 // How recently an agent_session must have reported to count as working now.
 // `agent_session.online` is set true by report_touch and nothing ever sets it
@@ -342,6 +343,30 @@ export function RoomProvider({ children }) {
   const liveOfSession = useCallback((composite) => liveKeys.has(String(composite || '')), [liveKeys])
 
   /**
+   * EVER EDITED — read off the touch tape, not off `last_tool`.
+   *
+   * `node_cov.last_tool` remembers only the MOST RECENT tool, so a file the
+   * agent edited and then read back reverts to "read" and the orange is lost.
+   * The `touch` rows are already mirrored here — every tool call the plugin
+   * reported, in server order — so the honest answer is a scan of them for a
+   * write, and it is the answer that stays true.
+   *
+   * Memoised on the ROW COUNT, so it moves when a touch lands and at no other
+   * time, and it is NEVER an input to geometry.
+   */
+  const touchN = store.count('touch')
+  const editedNodes = useMemo(() => {
+    const s = new Set()
+    for (const t of store.rows('touch')) {
+      const tool = String(t.tool || '')
+      if (tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit' || tool === 'NotebookEdit') {
+        s.add(key(t.nodeId))
+      }
+    }
+    return s
+  }, [touchN]) // eslint-disable-line
+
+  /**
    * Per-file coverage rolled up from node_cov. `lit` is how many of a file's
    * nodes have been touched; `at` is the newest touch in it — the clock the
    * FILL is read off, green through red; `slot` is which agent touched it last,
@@ -356,6 +381,7 @@ export function RoomProvider({ children }) {
     const tool = new Array(files.length).fill('')
     const slot = new Int8Array(files.length).fill(NEUTRAL_SLOT)
     const isNew = new Uint8Array(files.length)
+    const edited = new Uint8Array(files.length)
     const slotByNode = new Map()
     const exploredIds = new Set()
     let exploredNodes = 0
@@ -373,19 +399,30 @@ export function RoomProvider({ children }) {
       const ms = tsMs(c.lastAt)
       if (ms > at[fi]) { at[fi] = ms; tool[fi] = c.lastTool || ''; slot[fi] = sl }
     }
+    for (const nid of editedNodes) {
+      const fi = territory.byNode.get(nid)
+      if (fi !== undefined) edited[fi] = 1
+    }
     let exploredFiles = 0
     for (let i = 0; i < lit.length; i += 1) if (lit[i] > 0) exploredFiles += 1
     return {
-      lit, at, tool, slot, isNew, slotByNode, exploredNodes, exploredFiles, exploredIds,
+      lit, at, tool, slot, isNew, edited, slotByNode, exploredNodes, exploredFiles, exploredIds,
       totalNodes: territory.total,
       totalFiles: files.length,
       unresolved: covRows.length - exploredNodes,
     }
-  }, [covRows, territory, slotOfSession, nodeSplit.fresh])
+  }, [covRows, territory, slotOfSession, nodeSplit.fresh, editedNodes])
 
   // The edge rows, with an identity that changes ONLY when the graph does.
   const edgeN = store.count('edge')
   const edges = useMemo(() => store.rows('edge'), [edgeN]) // eslint-disable-line
+
+  /**
+   * THE BLAST RADIUS INDEX. `Map(fileIndex -> Set(fileIndex))`, three of them,
+   * built once from the edge list and the territory and never per selection.
+   * See `blast.js` — no new table, no new subscription, no module change.
+   */
+  const adjacency = useMemo(() => buildAdjacency(edges, territory.byNode), [edges, territory])
 
   /**
    * THE CITY. Cut once from the file list and never again.
@@ -703,7 +740,7 @@ export function RoomProvider({ children }) {
   }, [shouldDrive, walk?.id]) // eslint-disable-line
 
   const value = {
-    store, meta, subReady, repo, repos, participants, nodes, edges,
+    store, meta, subReady, repo, repos, participants, nodes, edges, adjacency,
     walk, frontier, verdict, nodeById, myName,
     callerCount, bestOrigin, walkDone,
     join, startWalk, useMock, retry: connect,

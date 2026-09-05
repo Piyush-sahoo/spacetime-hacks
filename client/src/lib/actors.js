@@ -146,6 +146,18 @@ export const STATE_LIVE = '#22c55e'
 export const STATE_COLD = '#ef4444'
 /** Minted after the survey — this ground is new. */
 export const STATE_NEW = '#3b82f6'
+/**
+ * THE AGENT CHANGED THIS FILE.
+ *
+ * Every other state on this map is a fact about ATTENTION — what was looked at,
+ * and how long ago. Orange is a fact about the FILE: its bytes are not what
+ * they were. That is a different kind of claim and it does not decay, so it
+ * outranks the whole green-to-red clock and never fades out of it.
+ *
+ * It does NOT outrank blue. A file the agent created and then edited is new
+ * ground first; "this did not exist" is the bigger fact about it.
+ */
+export const STATE_EDITED = '#f97316'
 
 /**
  * The clock here is the AGENT'S CONTEXT, not wall time.
@@ -174,13 +186,20 @@ const COLD_RGB = [239, 68, 68]
  */
 const FADE_STEPS = 24
 
-/** 'dark' | 'live' | 'cooling' | 'cold' | 'new'. `at` is ms, 0 for untouched. */
-export function stateOf(at, isNew, now) {
+/**
+ * 'dark' | 'live' | 'cooling' | 'cold' | 'new' | 'edited'. `at` is ms, 0 for
+ * untouched. `edited` is EVER edited, not last-edited — see `coverage.edited`
+ * in room.jsx, which reads the whole `touch` tape rather than `last_tool`.
+ */
+export function stateOf(at, isNew, now, edited) {
   // Blue beats red: "new" is a property of the FILE, "cold" is a property of
   // attention. A file created ten minutes ago and not looked at since is still
   // new ground.
   if (isNew) return 'new'
-  if (!at) return 'dark'
+  if (!at) return edited ? 'edited' : 'dark'
+  // Orange beats the clock. Reading a file after changing it does not un-change
+  // it, so `edited` is tested before recency and never fades.
+  if (edited) return 'edited'
   const age = now - at
   if (age < TOUCH_LIVE_MS) return 'live'
   if (age >= TOUCH_COLD_MS) return 'cold'
@@ -188,10 +207,11 @@ export function stateOf(at, isNew, now) {
 }
 
 /** The fill for a block, or `null` for ground nobody has ever opened. */
-export function stateColour(at, isNew, now) {
-  const s = stateOf(at, isNew, now)
+export function stateColour(at, isNew, now, edited) {
+  const s = stateOf(at, isNew, now, edited)
   if (s === 'dark') return null
   if (s === 'new') return STATE_NEW
+  if (s === 'edited') return STATE_EDITED
   if (s === 'live') return STATE_LIVE
   if (s === 'cold') return STATE_COLD
   const raw = (now - at - TOUCH_LIVE_MS) / (TOUCH_COLD_MS - TOUCH_LIVE_MS)
@@ -209,4 +229,5 @@ export const STATE_LABEL = {
   cooling: 'falling out of context',
   cold: 'read, out of context',
   new: 'new ground',
+  edited: 'changed by the agent',
 }

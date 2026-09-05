@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { actorLabel, STATE_LIVE, STATE_COLD, STATE_NEW } from '../lib/actors'
+import { actorLabel, STATE_LIVE, STATE_COLD, STATE_NEW, STATE_EDITED } from '../lib/actors'
 import Atlas from './Atlas.jsx'
 import TopStrip from './TopStrip.jsx'
 import LeftIndex from './LeftIndex.jsx'
@@ -255,6 +255,9 @@ export default function Room({ onLeave }) {
           <div id="legend">
             <span className="lg"><i style={{ background: STATE_LIVE }} />Read · in context</span>
             <span className="lg"><i style={{ background: STATE_COLD }} />Read · out of context</span>
+            {/* Orange is the only line here that is a fact about the FILE
+                rather than about attention, which is why it never fades. */}
+            <span className="lg"><i style={{ background: STATE_EDITED }} />Changed by the agent</span>
             <span className="lg dead">Dashed · never opened</span>
             {hasNewGround && <span className="lg"><i style={{ background: STATE_NEW }} />New ground</span>}
             {actors.length > 0 && <span className="lg who">Live right now</span>}

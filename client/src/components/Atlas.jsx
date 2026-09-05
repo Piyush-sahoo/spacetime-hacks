@@ -3,6 +3,7 @@ import { useRoom } from '../lib/room.jsx'
 import { P, pts, boundsOf, gridRange, hopPath, pointAt } from '../lib/iso'
 import { hopsOf } from '../lib/route'
 import { NEUTRAL_SLOT, slotColor, stateColour, stateOf, STATE_LABEL, STATE_NEW } from '../lib/actors'
+import { blastOf, MAX_DRAWN } from '../lib/blast'
 
 /**
  * THE MAP — a repo as an isometric plate, and an agent's route across it.
@@ -163,7 +164,14 @@ function bodyOf(b, fill, fillOpacity, sw, ghost) {
  * a different element from `.hl`, which is the hover highlight and stays
  * hidden until the pointer is over the block.
  */
-const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land }) {
+/**
+ * `rel` is the BLAST RADIUS channel: 0 none · 1 this file imports it ·
+ * 2 it imports this file · 3 both ways · 4 structural (same directory, no
+ * import either way). It is a prop rather than an imperative class so the memo
+ * still does its job — selecting a block re-renders the handful of blocks whose
+ * relation actually changed and walks past every other one.
+ */
+const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land, rel = 0 }) {
   const ghost = !lit
   const sw = sel ? 2 : 1.2
   const fill = ghost ? 'none' : (colour || 'var(--face)')
@@ -174,7 +182,7 @@ const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land }) {
   const top = [P(gx, gy, h), P(gx + w, gy, h), P(gx + w, gy + d, h), P(gx, gy + d, h)]
   const c = P(gx + w / 2, gy + d / 2, h)
   return (
-    <g className={`node${sel ? ' sel' : ''}`} data-id={b.id} style={{ cursor: 'pointer' }}>
+    <g className={`node${sel ? ' sel' : ''}${rel ? ' rel-on' : ''}`} data-id={b.id} style={{ cursor: 'pointer' }}>
       {bodyOf(b, fill, fo, sw, ghost)}
       {edge && !sel && (
         <polygon
@@ -186,6 +194,37 @@ const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land }) {
           strokeLinejoin="round"
           style={{ pointerEvents: 'none' }}
         />
+      )}
+      {/*
+        IN THE BLAST RADIUS. Ink, never a hue — a hue on this map means an
+        agent, and a dependency is not an agent. Direction is carried the same
+        way the routes carry it: solid outbound, dashed inbound, and the
+        connector line arriving here wears an arrowhead pointing the same way.
+      */}
+      {rel > 0 && !sel && (
+        <>
+          <polygon
+            className="rel"
+            points={pts(top)}
+            fill="none"
+            stroke="var(--ink)"
+            strokeWidth={2.6}
+            strokeLinejoin="round"
+            strokeDasharray={rel === 2 ? '5 3' : rel === 4 ? '2 3' : undefined}
+            style={{ pointerEvents: 'none' }}
+          />
+          {/* A ring on the ground as well as an outline on the roof: on a plate
+              fitted to 700 blocks the roof outline is sub-pixel and the ring is
+              what you actually see from across the room. */}
+          <polygon
+            points={pts([P(gx - 0.5, gy - 0.5, 0), P(gx + w + 0.5, gy - 0.5, 0), P(gx + w + 0.5, gy + d + 0.5, 0), P(gx - 0.5, gy + d + 0.5, 0)])}
+            fill="none"
+            stroke="var(--ink)"
+            strokeWidth={1.8}
+            strokeDasharray={rel === 2 ? '5 3' : rel === 4 ? '2 3' : undefined}
+            style={{ pointerEvents: 'none' }}
+          />
+        </>
       )}
       <polygon
         className="hl"
@@ -260,14 +299,14 @@ const Block = memo(function Block({ b, lit, colour, edge, sel, fresh, land }) {
 
 /** The paper-backed name tag under the front corner. Doubled labelling: the
  *  code chip says which district, the tag says which file. */
-const Tag = memo(function Tag({ b, lit, sel }) {
+const Tag = memo(function Tag({ b, lit, sel, rel = 0 }) {
   const p = P(b.gx + b.w, b.gy + b.d, 0)
   const txt = String(b.short || b.name).toUpperCase()
   const w = txt.length * 6.6 + 10
   const y = p[1] + 9
   const dim = !lit
   return (
-    <g style={{ pointerEvents: 'none' }}>
+    <g className={`tag${sel || rel ? ' on' : ''}`} style={{ pointerEvents: 'none' }}>
       <rect
         x={p[0] - w / 2} y={y} width={w} height={14}
         fill={sel ? 'var(--hi-bg)' : 'var(--paper)'}
@@ -285,12 +324,28 @@ const Tag = memo(function Tag({ b, lit, sel }) {
   )
 })
 
+/** A filled arrowhead sitting at `u` along a hop path, pointing along it. */
+function arrowAt(path, u, size) {
+  const a = pointAt(path, Math.max(0, u - 0.07))
+  const b = pointAt(path, u)
+  const dx = b[0] - a[0]
+  const dy = b[1] - a[1]
+  const L = Math.hypot(dx, dy) || 1
+  const ux = dx / L
+  const uy = dy / L
+  return pts([
+    [b[0], b[1]],
+    [b[0] - ux * size - uy * size * 0.55, b[1] - uy * size + ux * size * 0.55],
+    [b[0] - ux * size + uy * size * 0.55, b[1] - uy * size - ux * size * 0.55],
+  ])
+}
+
 // ── the component ───────────────────────────────────────────────────────────
 
 export default function Atlas({
   handle, scope, selected, onSelect, onPickDistrict, onDrill, playing, cursor, onStepPick,
 }) {
-  const { atlas, coverage, territory, routes, timeline, requestsByFile, now } = useRoom()
+  const { atlas, coverage, territory, routes, timeline, requestsByFile, now, adjacency } = useRoom()
   const svgRef = useRef(null)
   const worldRef = useRef(null)
   const pktRef = useRef(null)
@@ -382,6 +437,7 @@ export default function Atlas({
     const slot = new Int8Array(n).fill(NEUTRAL_SLOT)
     const at = new Float64Array(n)
     const isNew = new Uint8Array(n)
+    const edited = new Uint8Array(n)
     const asked = new Uint8Array(n)
     const seen = (fi) => {
       if (!coverage.lit[fi]) return false
@@ -395,10 +451,81 @@ export default function Atlas({
       if (!seen(fi)) continue
       lit[bi] = 1
       if (coverage.isNew[fi]) isNew[bi] = 1
+      // A district block stands for many files, so one changed file anywhere
+      // under it makes the district read as changed. That is the honest roll-up:
+      // the question the colour answers is "is there a change in here".
+      if (coverage.edited && coverage.edited[fi]) edited[bi] = 1
       if (coverage.at[fi] > at[bi]) { at[bi] = coverage.at[fi]; slot[bi] = coverage.slot[fi] }
     }
-    return { lit, slot, at, isNew, asked }
+    return { lit, slot, at, isNew, edited, asked }
   }, [scene, blockByFile, coverage, rewound, atlas, requestsByFile])
+
+  // ── the blast radius ──────────────────────────────────────────────────────
+  const selBlock = selected && selected.kind === 'block' ? selected.id : null
+  // The plate a click landed on. Selection is not a hover: it already
+  // re-renders the canvas, so reading it here costs nothing new.
+  const selPlate = selected && selected.kind === 'district' ? selected.name : null
+  const selBi = selBlock == null ? -1 : (indexById.get(selBlock) ?? -1)
+  const selFi = selBi >= 0 && scene.level === 'file' ? scene.blocks[selBi].fi : -1
+
+  /**
+   * WHAT ELSE THIS CHANGE TOUCHES.
+   *
+   * Two Map lookups on an index that was inverted once (`blast.js`), then a
+   * pass over the answer to turn file indices into scene blocks. Nothing here
+   * scans the edge list, which is the whole reason django/django's 22,880 edges
+   * do not stutter on a click.
+   *
+   * SELECTION IS NOT A HOVER. This re-renders — it always has, `sel` is a prop —
+   * and it only ever runs on pointerup, well after the click the canvas is not
+   * allowed to eat. The blocks are memoised on their props, so the re-render
+   * costs exactly the blocks whose relation changed.
+   */
+  const blast = useMemo(() => {
+    if (selFi < 0 || !adjacency) return null
+    const r = blastOf(adjacency, selFi)
+    if (!r.total) return null
+    const onMap = (list) => {
+      const out = []
+      for (const fi of list) {
+        const bi = blockByFile[fi]
+        if (bi < 0 || bi === selBi) continue
+        out.push(bi)
+      }
+      return out
+    }
+    const rel = new Int8Array(scene.blocks.length)
+    const mark = (bis, v) => { for (const bi of bis) rel[bi] = rel[bi] && rel[bi] !== v ? 3 : v }
+    const outB = onMap(r.out)
+    const inB = onMap(r.in)
+    const nearB = onMap(r.near)
+    mark(outB, 1)
+    mark(inB, 2)
+    mark(nearB, 4)
+
+    // THE FAN-OUT CAP. A file 200 others import is a hairball, not a drawing:
+    // the nearest handful get a line each and the panel says `+N more`. Nearest
+    // first, because a line you can follow is worth more than a line you can't.
+    const sb = scene.blocks[selBi]
+    const links = []
+    const push = (bi, dir) => {
+      const tb = scene.blocks[bi]
+      const path = dir === 'in' ? hopPath(tb, sb, 'xy') : hopPath(sb, tb, 'xy')
+      if (!path.len) return
+      links.push({ k: `${dir}-${tb.id}`, dir, path })
+    }
+    const near = (bis) => [...bis].sort((a, b) => {
+      const A = scene.blocks[a]
+      const B = scene.blocks[b]
+      return (Math.abs(A.gx - sb.gx) + Math.abs(A.gy - sb.gy)) - (Math.abs(B.gx - sb.gx) + Math.abs(B.gy - sb.gy))
+    })
+    for (const bi of near(outB).slice(0, MAX_DRAWN)) push(bi, 'out')
+    for (const bi of near(inB).slice(0, MAX_DRAWN)) push(bi, 'in')
+    for (const bi of near(nearB).slice(0, MAX_DRAWN)) push(bi, 'near')
+    return { rel, links, kind: r.kind, on: outB.length + inB.length + nearB.length }
+  }, [selFi, selBi, adjacency, scene, blockByFile])
+
+  const focused = !!(blast && blast.on)
 
   /**
    * THE CLOCK THE FILL IS READ AGAINST.
@@ -798,7 +925,7 @@ export default function Atlas({
     const n = scene.level === 'district'
       ? `${b.count} files`
       : `${b.count} symbol${b.count === 1 ? '' : 's'}`
-    const st = lit ? stateOf(paint.at[bi], paint.isNew[bi], Date.now()) : 'dark'
+    const st = lit ? stateOf(paint.at[bi], paint.isNew[bi], Date.now(), paint.edited[bi]) : 'dark'
     tip.textContent = `${b.name} — ${STATE_LABEL[st]} · ${n}`
     tip.style.display = 'block'
     const r = svgRef.current.getBoundingClientRect()
@@ -913,8 +1040,10 @@ export default function Atlas({
           id: b.id, name: b.name, gx: b.gx, gy: b.gy, h: b.h,
           sx: p[0] * c.k + c.tx, sy: p[1] * c.k + c.ty,
           lit: paint.lit[i], slot: paint.slot[i], k: c.k,
-          state: paint.lit[i] ? stateOf(paint.at[i], paint.isNew[i], Date.now()) : 'dark',
-          fill: paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], Date.now()) : null,
+          edited: !!paint.edited[i],
+          rel: blast ? blast.rel[i] : 0,
+          state: paint.lit[i] ? stateOf(paint.at[i], paint.isNew[i], Date.now(), paint.edited[i]) : 'dark',
+          fill: paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], Date.now(), paint.edited[i]) : null,
           edge: paint.lit[i] ? slotColor(paint.slot[i]) : null,
           at: paint.at[i],
         }
@@ -936,6 +1065,8 @@ export default function Atlas({
         // moved. Reported, never swallowed.
         overflowed: atlas.overflowed,
         lit: paint.lit.reduce((a, x) => a + x, 0),
+        edited: paint.edited.reduce((a, x) => a + x, 0),
+        blast: blast ? { kind: blast.kind, on: blast.on, links: blast.links.length } : null,
         ticks: stats.current.ticks,
         paints: stats.current.paints,
         avgMs: stats.current.paints ? stats.current.ms / stats.current.paints : 0,
@@ -947,10 +1078,6 @@ export default function Atlas({
     }
   })
 
-  const selBlock = selected && selected.kind === 'block' ? selected.id : null
-  // The plate a click landed on. Selection is not a hover: it already
-  // re-renders the canvas, so reading it here costs nothing new.
-  const selPlate = selected && selected.kind === 'district' ? selected.name : null
   const showTags = scene.blocks.length <= 700
 
   return (
@@ -973,7 +1100,15 @@ export default function Atlas({
             <line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" strokeWidth=".8" opacity=".55" />
           </pattern>
         </defs>
-        <g id="world" ref={worldRef}>
+        {/*
+          `focus` is the DIM. Every block, tag, plate and route line drops to
+          35% and the blast radius stays at full — done in CSS on one ancestor
+          rather than as a prop on 2,973 blocks, so selecting something costs
+          the re-render of the blocks whose relation changed and nothing else.
+          It is opacity only: a dimmed dark block is still fully clickable, and
+          clicking one still fires `request_exploration`.
+        */}
+        <g id="world" ref={worldRef} className={focused ? 'focus' : undefined}>
           <g opacity={0.55}>{grid}</g>
 
           {/* district plates — dashed, because a district is a boundary, not a thing */}
@@ -1005,7 +1140,7 @@ export default function Atlas({
           </g>
 
           {/* the route, on the ground plane, under everything that stands up */}
-          <g>
+          <g className="routes">
             {drawn.map((d) => {
               const col = d.route.colour || 'var(--ink)'
               // A finished run keeps its colour and gets a thinner dashed line:
@@ -1047,11 +1182,12 @@ export default function Atlas({
                   key={b.id}
                   b={b}
                   lit={!!paint.lit[i]}
-                  colour={paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], paintNow) : null}
+                  colour={paint.lit[i] ? stateColour(paint.at[i], paint.isNew[i], paintNow, paint.edited[i]) : null}
                   edge={paint.lit[i] ? colourOfSlot(paint.slot[i]) : null}
                   sel={selBlock === b.id}
                   fresh={paint.at[i] > 0 && nowMs - paint.at[i] < HALO_MS}
                   land={!!b.newLand}
+                  rel={blast ? blast.rel[i] : 0}
                 />
               )
             })}
@@ -1061,7 +1197,7 @@ export default function Atlas({
           {showTags && (
             <g>
               {scene.blocks.map((b, i) => (
-                <Tag key={b.id} b={b} lit={!!paint.lit[i]} sel={selBlock === b.id} />
+                <Tag key={b.id} b={b} lit={!!paint.lit[i]} sel={selBlock === b.id} rel={blast ? blast.rel[i] : 0} />
               ))}
             </g>
           )}
@@ -1090,6 +1226,36 @@ export default function Atlas({
                   <rect x={7} y={-19} width={64} height={14} fill="var(--paper)" stroke="var(--ink)" strokeWidth={0.8} />
                   <text x={10} y={-8} fontSize="10" fill="var(--ink)" fontWeight="500">·</text>
                 </g>
+              </g>
+            ))}
+          </g>
+
+          {/*
+            THE CONNECTORS. Above the blocks, never hit-tested, and drawn with
+            the SAME path builder the routes use — so a dependency line and a
+            route line can never disagree about how a hop bends.
+
+            Solid with an arrowhead pointing away = this file imports that one.
+            Dashed with an arrowhead pointing back = that one imports this file.
+            Dotted with no arrowhead = structural, a directory fact, offered
+            only to a file that has no imports either way.
+          */}
+          <g id="links" style={{ pointerEvents: 'none' }}>
+            {blast && blast.links.map((l) => (
+              <g key={l.k}>
+                <polyline
+                  points={pts(l.path.scr)}
+                  fill="none"
+                  stroke="var(--ink)"
+                  strokeWidth={l.dir === 'near' ? 1.4 : 2.4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={l.dir === 'near' ? 0.55 : 0.9}
+                  strokeDasharray={l.dir === 'in' ? '6 4' : l.dir === 'near' ? '2 4' : undefined}
+                />
+                {l.dir !== 'near' && (
+                  <polygon points={arrowAt(l.path, 0.76, 7)} fill="var(--ink)" opacity={0.9} />
+                )}
               </g>
             ))}
           </g>

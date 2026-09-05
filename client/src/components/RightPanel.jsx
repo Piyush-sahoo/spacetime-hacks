@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
 import { key, num, idHex, tsMs } from '../lib/util'
 import { actorLabel, slotColor, stateColour, stateOf, STATE_LABEL } from '../lib/actors'
+import { blastOf, MAX_LISTED } from '../lib/blast'
 import NodeList from './NodeList.jsx'
 import WalkView from './WalkView.jsx'
 import Verdict from './Verdict.jsx'
@@ -39,7 +40,7 @@ export default function RightPanel({
   const {
     touches, timeline, atlas, territory, coverage, requests, requestsByFile,
     requestExploration, canRequest, actors, covState, sessionFilter, walk,
-    dirMeta, districtStats,
+    dirMeta, districtStats, adjacency,
   } = useRoom()
 
   // Ages must tick, or a live feed reads as a screenshot. One interval, one
@@ -89,7 +90,7 @@ export default function RightPanel({
             selected={selected} atlas={atlas} territory={territory} coverage={coverage}
             requestsByFile={requestsByFile} requestExploration={requestExploration}
             canRequest={canRequest} onSelect={onSelect}
-            dirMeta={dirMeta} districtStats={districtStats}
+            dirMeta={dirMeta} districtStats={districtStats} adjacency={adjacency}
           />
         )}
 
@@ -198,7 +199,7 @@ function Activity({ rows, seen, selected, onPickStep, cursor, covState, sessionF
 
 function What({
   selected, atlas, territory, coverage, requestsByFile, requestExploration, canRequest, onSelect,
-  dirMeta, districtStats,
+  dirMeta, districtStats, adjacency,
 }) {
   const [sent, setSent] = useState(null)
 
@@ -354,8 +355,9 @@ function What({
   // WHEN it was last touched, and WHO touched it — two facts, two channels,
   // exactly as the plate draws them.
   const stateNow = Date.now()
-  const state = lit ? stateOf(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : 'dark'
-  const colour = lit ? stateColour(coverage.at[b.fi], coverage.isNew[b.fi], stateNow) : null
+  const changed = !!(coverage.edited && coverage.edited[b.fi])
+  const state = lit ? stateOf(coverage.at[b.fi], coverage.isNew[b.fi], stateNow, changed) : 'dark'
+  const colour = lit ? stateColour(coverage.at[b.fi], coverage.isNew[b.fi], stateNow, changed) : null
   const edge = lit ? slotColor(coverage.slot[b.fi]) : null
   const sym = Number(f.symbols || 0)
 
@@ -385,6 +387,7 @@ function What({
         {dark
           ? 'No agent has opened it. That is why it is drawn dashed.'
           : `Last opened with ${coverage.tool[b.fi] || 'a tool call'} ${ago(coverage.at[b.fi])} ago.`}
+        {changed && ' An agent has written to it — that is a fact about the file, so it stays orange however long ago it was.'}
       </p>
 
       {!dark && (
@@ -400,6 +403,8 @@ function What({
           {state === 'live' ? ' — the fill is green while somebody is standing here, and cools to red over five minutes.' : '.'}
         </p>
       )}
+
+      <Blast fi={b.fi} adjacency={adjacency} atlas={atlas} coverage={coverage} onSelect={onSelect} />
 
       <div className="actions">
         {dark && canRequest && !open && (
@@ -419,6 +424,105 @@ function What({
         <button className="ctl" onClick={() => onSelect(null)}>Clear</button>
       </div>
     </>
+  )
+}
+
+/* ── BLAST RADIUS ─────────────────────────────────────────────────────────── */
+
+/**
+ * WHAT ELSE THIS CHANGE TOUCHES.
+ *
+ * Read straight off the `IMPORTS` edges `enrich_repo` extracted from the real
+ * import statements — the same rows the plate draws its connector lines from,
+ * so the list and the drawing can never disagree.
+ *
+ * Every entry carries the file's OWN sentence, because "six files import this"
+ * is a number and "six files, and here is what each of them is for" is an
+ * answer. The list is capped and says how much it capped.
+ */
+function Blast({ fi, adjacency, atlas, coverage, onSelect }) {
+  const r = useMemo(() => blastOf(adjacency, fi), [adjacency, fi])
+
+  if (!r.total) {
+    return (
+      <>
+        <h3 className="sec">Blast radius</h3>
+        <p style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+          No import edge either way. Nothing on this map reaches this file
+          through an import statement, and it reaches nothing.
+        </p>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <h3 className="sec">Blast radius</h3>
+      {r.kind === 'structural' ? (
+        <>
+          <p style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-2)', margin: '0 0 6px' }}>
+            <b>Structural only</b> — this file has no import edges at all, so what
+            is listed is the directory it sits in, not anything that depends on
+            it. The plate draws these dotted, without arrows, for the same reason.
+          </p>
+          <Rel label="SAME DIRECTORY" mark="·" cls="near" list={r.near} atlas={atlas} coverage={coverage} onSelect={onSelect} />
+        </>
+      ) : (
+        <>
+          <Rel label="IMPORTS" mark="→" cls="out" list={r.out} atlas={atlas} coverage={coverage} onSelect={onSelect} />
+          <Rel label="IMPORTED BY" mark="←" cls="in" list={r.in} atlas={atlas} coverage={coverage} onSelect={onSelect} />
+        </>
+      )}
+    </>
+  )
+}
+
+function Rel({ label, mark, cls, list, atlas, coverage, onSelect }) {
+  const head = list.slice(0, MAX_LISTED)
+  const rest = list.length - head.length
+  return (
+    <div style={{ margin: '0 0 8px' }}>
+      <p className="eyebrow" style={{ margin: '0 0 4px' }}>
+        {label} {mark} {list.length}
+      </p>
+      {!list.length ? (
+        <p style={{ fontSize: 11.5, color: 'var(--ink-2)', margin: 0, opacity: 0.75 }}>None.</p>
+      ) : (
+        <ul className={`q blast ${cls}`}>
+          {head.map((x) => {
+            const f = atlas.files[x]
+            if (!f) return null
+            const bl = atlas.blocks[atlas.byFile.get(x)]
+            const lit = coverage.lit[x] > 0
+            return (
+              <li
+                key={x}
+                style={{ cursor: bl ? 'pointer' : 'default' }}
+                onClick={() => { if (bl) onSelect({ kind: 'block', id: bl.id }) }}
+                title={f.path}
+              >
+                <span style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i
+                    style={{
+                      display: 'inline-block', width: 8, height: 8, flex: '0 0 auto',
+                      border: `1px ${lit ? 'solid' : 'dashed'} var(--ink)`,
+                      background: lit ? 'var(--ink-2)' : 'transparent',
+                    }}
+                  />
+                  {f.label}
+                </span>
+                <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0 14px' }}>
+                  {f.summary || 'Not read yet — no sentence for this file.'}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {rest > 0 && (
+        <p style={{ fontSize: 11.5, color: 'var(--ink-2)', margin: '3px 0 0' }}>+{rest} more</p>
+      )}
+    </div>
   )
 }
 
