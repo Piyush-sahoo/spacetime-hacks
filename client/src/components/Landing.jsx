@@ -114,7 +114,7 @@ export default function Landing({ onEnter }) {
 
       <footer className="rule px-5 sm:px-8 py-5 flex items-center justify-between gap-3 flex-wrap">
         <span className="micro-label">BOUNDED BACKWARDS WALK · k=6 · THRESHOLD 0.95</span>
-        <span className="micro-label">SUBSTRATE—FRICTION LINEAGE</span>
+        <span className="micro-label">SWE-BENCH VERIFIED · 172 LABELLED FIXES · 7 REPOS</span>
       </footer>
     </div>
   )

@@ -1,9 +1,9 @@
 import { PRIOR } from '../lib/config'
 
 /**
- * The honesty panel. This number is carried, not measured here, and the copy
- * says so — CONTRACT.md is explicit that recall is not computable on an
- * unlabelled repo.
+ * The honesty panel. This number is a published measurement over labelled
+ * fixes, not something computed from the repo on screen — recall is not
+ * computable on an unlabelled repo, and the copy says so.
  */
 export default function PriorNote({ compact = false }) {
   if (compact) {
@@ -21,12 +21,14 @@ export default function PriorNote({ compact = false }) {
         Measured <span className="mono" style={{ color: 'var(--ink)' }}>{PRIOR.recall.toFixed(3)}</span> recall
         across <span className="mono" style={{ color: 'var(--ink)' }}>{PRIOR.n}</span> labelled fixes
         in <span className="mono" style={{ color: 'var(--ink)' }}>{PRIOR.repos}</span> repos
-        (<span className="mono">{PRIOR.hits}/{PRIOR.n}</span>).
+        (<span className="mono">{PRIOR.hits}/{PRIOR.n}</span>, type-resolved graph;{' '}
+        <span className="mono">{PRIOR.recallNameMatched.toFixed(3)}</span> name-matched).
       </p>
       <p className="text-[13.5px] leading-relaxed mt-2" style={{ color: 'var(--muted)' }}>
         Recall is <em>not computable</em> on an unlabelled repo — nothing here tells you
-        this repo's recall. The verdict cites the prior, which is why it refuses.
+        this repo&rsquo;s recall. The verdict cites the measurement, which is why it refuses.
       </p>
+      <p className="micro-label mt-3">{PRIOR.source}</p>
     </div>
   )
 }

@@ -7,11 +7,11 @@ import { key, splitQual, pct } from '../lib/util'
  * subscription — nobody computes it in the browser.
  */
 export default function Verdict() {
-  const { walk, verdict, nodeById } = useRoom()
+  const { walk, verdict, nodeById, walkDone } = useRoom()
   if (!walk) return null
 
   if (!verdict) {
-    if (!walk.done) return null
+    if (!walkDone) return null
     return (
       <section className="panel p-4">
         <span className="micro-label">WALK EXHAUSTED · WAITING FOR VERDICT ROW…</span>

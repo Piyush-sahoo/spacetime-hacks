@@ -14,7 +14,7 @@ const KIND_TINT = {
 const LIMIT = 240
 
 export default function NodeList({ onPick }) {
-  const { nodes, walk, repo, startWalk } = useRoom()
+  const { nodes, walk, repo, startWalk, callerCount, walkDone } = useRoom()
   const [q, setQ] = useState('')
 
   const shown = useMemo(() => {
@@ -22,20 +22,25 @@ export default function NodeList({ onPick }) {
     const src = needle
       ? nodes.filter((n) => `${n.qual || ''} ${n.name || ''}`.toLowerCase().includes(needle))
       : nodes
+    // Most callers first: those are the origins whose backwards walk actually
+    // has somewhere to go. Alphabetical order would put dead leaves on top.
     return [...src]
-      .sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) || String(a.qual).localeCompare(String(b.qual)))
+      .sort((a, b) =>
+        callerCount(b.id) - callerCount(a.id) ||
+        (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||
+        String(a.qual).localeCompare(String(b.qual)))
       .slice(0, LIMIT)
-  }, [nodes, q])
+  }, [nodes, q, callerCount])
 
-  const busy = walk && !walk.done
+  const busy = walk && !walkDone
 
   return (
     <section className="panel flex flex-col min-h-0 overflow-hidden">
       <div className="p-3.5 sm:p-4 pb-3 border-b" style={{ borderColor: 'var(--line)' }}>
         <div className="flex items-center justify-between mb-2.5 gap-2">
-          <span className="micro-label">THE CHANGED FILE</span>
+          <span className="micro-label">PICK THE CHANGED SYMBOL</span>
           <span className="mono text-[11px]" style={{ color: 'var(--muted)' }}>
-            {nodes.length.toLocaleString()} loaded
+{'\u2190'} callers · {nodes.length.toLocaleString()} loaded
             {repo?.nodeCount ? ` / ${Number(repo.nodeCount).toLocaleString()}` : ''}
           </span>
         </div>
@@ -73,13 +78,18 @@ export default function NodeList({ onPick }) {
                   <span className="block mono text-[13px] truncate">{symbol}</span>
                   <span className="block mono text-[11px] truncate" style={{ color: 'var(--muted)' }}>{path}</span>
                 </span>
-                <Play size={13} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--accent)' }} />
+                <span className="shrink-0 flex items-center gap-2">
+                  <span className="mono text-[10.5px] whitespace-nowrap" style={{ color: callerCount(n.id) ? 'var(--ink-soft)' : 'var(--muted)' }}>
+                    {callerCount(n.id)}←
+                  </span>
+                  <Play size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--accent)' }} />
+                </span>
               </button>
             </li>
           )
         })}
         {shown.length === LIMIT && (
-          <li className="px-4 py-2.5 micro-label">SHOWING FIRST {LIMIT} — FILTER TO NARROW</li>
+          <li className="px-4 py-2.5 micro-label">TOP {LIMIT} BY CALLER COUNT — FILTER TO NARROW</li>
         )}
       </ul>
     </section>

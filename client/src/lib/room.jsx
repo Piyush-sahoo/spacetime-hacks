@@ -79,6 +79,7 @@ export function RoomProvider({ children }) {
     stage2Ref.current = rid
     apiRef.current.subscribe([
       `SELECT * FROM node WHERE repo_id = ${rid}`,
+      `SELECT * FROM edge WHERE repo_id = ${rid}`,
       `SELECT * FROM walk WHERE repo_id = ${rid}`,
       'SELECT * FROM frontier',
       'SELECT * FROM verdict',
@@ -106,6 +107,72 @@ export function RoomProvider({ children }) {
   }, [v, repo]) // eslint-disable-line
 
   const nodes = useMemo(() => store.rows('node'), [v]) // eslint-disable-line
+
+  // The walk runs along PREDECESSORS (edge.dst == current, collect edge.src),
+  // so a symbol's caller count is exactly how much walk it will produce. A leaf
+  // with no callers exhausts at hop 0 and makes for a dead demo; surfacing this
+  // is what stops a judge clicking a dud.
+  const callers = useMemo(() => {
+    const m = new Map()
+    for (const e of store.rows('edge')) {
+      const k = key(e.dst)
+      m.set(k, (m.get(k) || 0) + 1)
+    }
+    return m
+  }, [v]) // eslint-disable-line
+
+  const callerCount = useCallback((id) => callers.get(key(id)) || 0, [callers])
+
+  // Predecessor map, same direction the server walks.
+  const preds = useMemo(() => {
+    const m = new Map()
+    for (const e of store.rows('edge')) {
+      const d = key(e.dst)
+      let a = m.get(d)
+      if (!a) { a = []; m.set(d, a) }
+      a.push(key(e.src))
+    }
+    return m
+  }, [v]) // eslint-disable-line
+
+  // The one-click demo path. "Deepest" means most HOPS, not most nodes: the
+  // highest-in-degree symbol in django is a test helper with 1000 direct
+  // callers, which paints one enormous hop and then stops. Simulating the same
+  // bounded backwards BFS locally lets us pick an origin that actually walks.
+  const bestOrigin = useMemo(() => {
+    if (!nodes.length || !preds.size) return null
+    const cands = nodes
+      .filter((n) => {
+        const c = callers.get(key(n.id)) || 0
+        return c >= 1 && c <= 40
+      })
+      .slice(0, 600)
+    let best = null, bestScore = -1
+    for (const n of cands) {
+      let frontierSet = [key(n.id)]
+      const seen = new Set(frontierSet)
+      let hops = 0, total = 1
+      for (let h = 0; h < WALK_K && frontierSet.length; h++) {
+        const next = []
+        for (const cur of frontierSet) {
+          for (const src of preds.get(cur) || []) {
+            if (seen.has(src)) continue
+            seen.add(src)
+            next.push(src)
+          }
+        }
+        if (!next.length) break
+        hops = h + 1
+        total += next.length
+        frontierSet = next
+        if (total > 4000) break
+      }
+      // Reward depth hard, penalise a wall of nodes gently.
+      const score = hops * 1000 - Math.min(total, 3000) / 10
+      if (score > bestScore) { bestScore = score; best = n }
+    }
+    return best || nodes[0]
+  }, [nodes, preds, callers])
 
   // The walk everyone is watching: newest walk row for this repo. Picked from
   // the SUBSCRIPTION, so a tab that clicked nothing lands on the same one.
@@ -149,6 +216,10 @@ export function RoomProvider({ children }) {
   // subscription. If the starter goes away mid-walk, the lowest-identity online
   // participant takes the wheel after a stall so the demo never freezes.
   const amDriver = !!(walk && meta.identity && idHex(walk.startedBy) === meta.identity)
+  // A step that lands after the walk finished can flip `done` back to false on
+  // the server, so a walk is terminal once EITHER `done` is set or its verdict
+  // row exists. Without this the driver would step forever.
+  const walkDone = !!walk && (!!walk.done || !!verdict)
   const progress = useRef({ walkId: null, hop: -1, changedAt: 0 })
   const [stalled, setStalled] = useState(false)
 
@@ -164,19 +235,19 @@ export function RoomProvider({ children }) {
   }, [v, walk, stalled]) // eslint-disable-line
 
   useEffect(() => {
-    if (!walk || walk.done) return
+    if (!walk || walkDone) return
     const t = setInterval(() => {
       setStalled(Date.now() - progress.current.changedAt > STALL_TAKEOVER_MS)
     }, 600)
     return () => clearInterval(t)
-  }, [walk?.id, walk?.done]) // eslint-disable-line
+  }, [walk?.id, walkDone]) // eslint-disable-line
 
   const onlineHexes = useMemo(
     () => participants.filter((p) => p.online).map((p) => idHex(p.identity)).sort(),
     [participants]
   )
   const iAmLeader = onlineHexes.length > 0 && onlineHexes[0] === meta.identity
-  const shouldDrive = !!walk && !walk.done && (amDriver || (stalled && iAmLeader))
+  const shouldDrive = !!walk && !walkDone && (amDriver || (stalled && iAmLeader))
 
   useEffect(() => {
     if (!shouldDrive || !apiRef.current || !walk) return
@@ -190,6 +261,7 @@ export function RoomProvider({ children }) {
   const value = {
     store, meta, subReady, repo, repos, participants, nodes,
     walk, frontier, verdict, nodeById, myName,
+    callerCount, bestOrigin, walkDone,
     join, startWalk, useMock, retry: connect,
     isMock: meta.mode === 'mock',
     amDriver,

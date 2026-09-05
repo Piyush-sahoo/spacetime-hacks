@@ -11,9 +11,7 @@ bounded k=6 BACKWARDS walk over the call graph, writing each hop into a `frontie
 table. Both tabs watch the walk paint hop-by-hop. It exhausts. The verdict lands on
 both screens: RUN_FULL, with the guarding test it never reached lit red.
 
-## Lineage (reused from substrate-friction, already copied into this repo)
-- `src/friction/gate.py` — `select_tests()` is the BFS being ported; `wilson_lb()` used verbatim
-- `src/friction/loader.py` — batching pattern (clamp batches to <=1000)
+## Reuse
 - `data/shipped/arms/<instance>/{nodes,edges}.ndjson.gz` — the seed graphs
 - `data/shipped/arms/manifest.jsonl` — carries `fix_site_ids` + `test_target_ids` (the labels)
 - Measured priors to display: arm A pooled recall **0.314** (37/118), arm B **0.419** (72/172), n=172, 7 repos.

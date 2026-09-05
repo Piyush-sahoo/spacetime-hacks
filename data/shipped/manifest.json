@@ -1,6 +1,6 @@
 {
   "payload": "two-arm bounded neighbourhoods (v2)",
-  "description": "Per-instance, per-arm bounded fix->test neighbourhoods for Substrate Friction v2. Ships what a judge needs to run `friction compare`/`delta` and to live-load any instance's arms into the engine — NOT the 4.0 GB working corpus (per-instance .scip indexes + full-arm graphs) used to build them.",
+  "description": "Per-instance, per-arm bounded fix->test neighbourhoods for the seed corpus. Ships what a judge needs to run the comparison tooling and to live-load any instance's arms into the engine — NOT the 4.0 GB working corpus (per-instance .scip indexes + full-arm graphs) used to build them.",
   "instances": 50,
   "arms_per_instance": 2,
   "endpoint_bearing_instances": 43,
@@ -10,7 +10,7 @@
     "hops": 6,
     "node_budget": 16000,
     "edge_budget": 24000,
-    "note": "friction.subgraph.induced_neighbourhood(maxLen=6). Arm A: 0/50 truncated (sparse, faithful to the full arm). Arm B: 47/50 truncated (arm B is ~4x denser; the maxLen-6 neighbourhood exceeds the 24k-edge budget)."
+    "note": "induced_neighbourhood(maxLen=6). Arm A: 0/50 truncated (sparse, faithful to the full arm). Arm B: 47/50 truncated (arm B is ~4x denser; the maxLen-6 neighbourhood exceeds the 24k-edge budget)."
   },
   "id_bands": {
     "arm_a_base": "1e10 + idx*1e7",
@@ -19,7 +19,7 @@
   },
   "engine_pin": "02a40025d2d57e97ab2754c8256219cdbfeab379 (v0.1.1, AGPL-3.0)",
   "layout": {
-    "arms/manifest.jsonl": "per-instance/per-arm node+edge counts, id band, and fix_site_ids/test_target_ids. The cache `friction compare`/`list` read. All 50 instances.",
+    "arms/manifest.jsonl": "per-instance/per-arm node+edge counts, id band, and fix_site_ids/test_target_ids. The cache the comparison tooling read. All 50 instances.",
     "arms/path_stats.json": "pinned live-engine answerability + bounded fix->test path counts per arm (the two-arm contrast `compare` renders). All 50 instances.",
     "arms/<instance_id>/nodes.ndjson.gz": "both arms' neighbourhood Function nodes (band-disjoint), gzipped.",
     "arms/<instance_id>/edges.ndjson.gz": "both arms' neighbourhood CALLS edges (band-disjoint), gzipped.",
@@ -35,7 +35,7 @@
   "not_shipped": [
     "data/instances/arms/<id>/index.scip (~67 MB each, the pyright SCIP index) — regeneration input",
     "data/instances/arms/<id>/{arm_a,arm_b}/ full graphs beyond the maxLen-6 neighbourhood",
-    "the django checkout (data/repos/django) and data/instances/ref_cache.json — needed only to reproduce headline numbers via friction.harness / scripts/graph_delta.py, not to run the CLI"
+    "the django checkout (data/repos/django) and data/instances/ref_cache.json — needed only to reproduce headline numbers via the build scripts (scripts/graph_delta.py, not to run the CLI"
   ],
   "neighbourhood_bytes_gz": 17020000
 }

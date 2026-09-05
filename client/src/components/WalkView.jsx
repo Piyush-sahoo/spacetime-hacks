@@ -4,6 +4,9 @@ import { useRoom } from '../lib/room.jsx'
 import { key, splitQual, idHex } from '../lib/util'
 import { WALK_K } from '../lib/config'
 
+// A single hop in django can be 1000+ nodes; render a readable slice.
+const CHIP_CAP = 48
+
 /**
  * THE MONEY SHOT.
  *
@@ -13,7 +16,7 @@ import { WALK_K } from '../lib/config'
  * that clicked nothing paints the identical walk at the identical moment.
  */
 export default function WalkView() {
-  const { walk, frontier, nodeById, participants, meta, amDriver } = useRoom()
+  const { walk, frontier, nodeById, participants, meta, amDriver, bestOrigin, startWalk, walkDone } = useRoom()
   const laneRef = useRef(null)
 
   const hops = useMemo(() => {
@@ -42,6 +45,11 @@ export default function WalkView() {
           predecessors only, because production code has no edge to the test that guards it.
           It paints here, hop by hop, on every screen in this room.
         </p>
+        {bestOrigin && (
+          <button className="pill-dark mt-1" onClick={() => startWalk(bestOrigin.id)}>
+            Run the deepest one for me
+          </button>
+        )}
       </section>
     )
   }
@@ -50,7 +58,7 @@ export default function WalkView() {
   const hop = Number(walk.hop)
   const starter = participants.find((p) => idHex(p.identity) === idHex(walk.startedBy))
   const origin = nodeById(walk.origin)
-  const pctDone = Math.min(100, ((walk.done ? k : hop) / k) * 100)
+  const pctDone = Math.min(100, ((walkDone ? k : hop) / k) * 100)
 
   return (
     <section className="panel overflow-hidden flex flex-col min-h-0">
@@ -59,7 +67,7 @@ export default function WalkView() {
           <span className="micro-label flex items-center gap-1.5">
             <CornerUpLeft size={12} /> BACKWARDS WALK · PREDECESSORS
           </span>
-          {walk.done ? (
+          {walkDone ? (
             <span className="micro-label" style={{ color: 'var(--ink)' }}>
               EXHAUSTED · {walk.graphComplete ? 'GRAPH COMPLETE' : `HIT k=${k}`}
             </span>
@@ -82,19 +90,19 @@ export default function WalkView() {
         <div className="mt-3 flex items-center gap-3">
           <div className="relative flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(22,20,19,0.10)' }}>
             <div
-              className={`h-full rounded-full transition-all duration-300 ${!walk.done ? 'sweep relative' : ''}`}
+              className={`h-full rounded-full transition-all duration-300 ${!walkDone ? 'sweep relative' : ''}`}
               style={{ width: `${pctDone}%`, background: 'var(--accent)' }}
             />
           </div>
           <span className="mono text-[11.5px] whitespace-nowrap" style={{ color: 'var(--muted)' }}>
-            hop {hop}/{k} · {Number(walk.selected)} reached
+            hop {hop}/{k} · {Number(walk.selected)} test{Number(walk.selected) === 1 ? '' : 's'} reached
           </span>
         </div>
       </div>
 
       <div ref={laneRef} className="flex-1 overflow-y-auto thin-scroll p-3.5 sm:p-4 space-y-3 min-h-0" style={{ maxHeight: '44vh' }}>
         {hops.map(([h, rows]) => {
-          const live = !walk.done && h === hop
+          const live = !walkDone && h === hop
           return (
             <div key={h} className="hop-cell" style={{ animationDelay: '0ms' }}>
               <div className="flex items-center gap-2 mb-1.5">
@@ -111,7 +119,7 @@ export default function WalkView() {
                 <span className="flex-1 h-px" style={{ background: 'var(--line)' }} />
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {rows.map((f, i) => {
+                {rows.slice(0, CHIP_CAP).map((f, i) => {
                   const n = nodeById(f.nodeId)
                   const label = n ? splitQual(n.qual, n.name).symbol : `#${key(f.nodeId)}`
                   return (
@@ -131,6 +139,11 @@ export default function WalkView() {
                     </span>
                   )
                 })}
+                {rows.length > CHIP_CAP && (
+                  <span className="mono text-[11.5px] px-2 py-1 rounded-md" style={{ color: 'var(--muted)', border: '1px dashed var(--line)' }}>
+                    +{(rows.length - CHIP_CAP).toLocaleString()} more
+                  </span>
+                )}
                 {rows.length === 0 && <span className="micro-label">FRONTIER EMPTY</span>}
               </div>
             </div>

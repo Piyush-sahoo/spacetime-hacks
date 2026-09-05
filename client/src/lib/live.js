@@ -28,10 +28,10 @@ export async function connectLive(store) {
       .onConnect((connection, identity, tok) => {
         try { if (tok) localStorage.setItem('map-room-token', tok) } catch { /* private mode */ }
 
-        // Mirror every table we care about. `edge` is deliberately not
-        // subscribed — the walk runs server-side, the client never needs edges.
+        // Mirror every table. The walk itself runs server-side; `edge` is
+        // mirrored only so the file list can show how many callers a symbol has
+        // and therefore which origins produce a walk worth watching.
         for (const t of TABLES) {
-          if (t === 'edge') continue
           const handle = connection.db?.[t]
           if (!handle) continue
           handle.onInsert?.((_ctx, row) => store.upsert(t, row))
