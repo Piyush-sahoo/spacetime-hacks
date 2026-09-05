@@ -64,9 +64,12 @@ export default function TopStrip({
       <div id="controls">
         <button className="ctl" onClick={onBack} disabled={!canBack} title="Back one tool call">◂ Back</button>
         <button className="ctl primary" onClick={onNext} disabled={!canNext} title="Forward one tool call">Next ▸</button>
-        <button className="ctl" onClick={onPlay}>{playing ? '‖ Pause' : '▸ Play'}</button>
-        <button className="ctl" onClick={onStep}>Trace one step</button>
-        <button className="ctl" onClick={onRefit}>Refit</button>
+        {/*
+          PAUSE, TRACE ONE STEP and REFIT are gone. All three drove the timeline,
+          which has its own scrubber directly below the map — three buttons up
+          here for a control that is already down there, competing with the two
+          that actually move you through the run.
+        */}
         {onLeave && <button className="ctl" onClick={onLeave} title="Back to the projects">&#9668; Out</button>}
       </div>
     </div>
