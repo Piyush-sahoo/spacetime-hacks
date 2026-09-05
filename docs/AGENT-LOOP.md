@@ -80,6 +80,22 @@ that can break someone's coding session is not instrumentation anyone will insta
 
 ## How your tap reaches the agent
 
+An AI agent cannot hold a subscription — it works in turns. So the human → agent
+direction is a **pull at turn boundaries**, and there are three paths:
+
+| Path | Fires when | Covers the case where |
+|---|---|---|
+| `UserPromptSubmit` | you type anything | the agent is idle and you speak to it |
+| `Stop` | the agent finishes a turn | **the agent was working, then went quiet** |
+| subscriber daemon | instantly, on insert | nobody is at the keyboard at all |
+
+The `Stop` hook matters most. Without it, a request made while the agent is mid-task is
+never delivered: the agent finishes, falls silent, and nothing wakes it. With it, the
+agent finishes what it was doing and then turns to your region on its own — nobody
+types anything.
+
+A `Stop` hook must guard against re-triggering itself, or the agent loops forever.
+
 Clicking a dark region calls:
 
 ```
@@ -111,14 +127,20 @@ stateDiagram-v2
 ## The one honest limitation
 
 **An agent cannot subscribe.** It is turn-based — it does not hold a socket open and
-react to a push mid-thought.
+react to a push mid-thought. So the human → agent hop is a pull, delivered at the next
+turn boundary by one of the three hooks above.
 
-So the human → agent hop is a **pull at turn boundaries**, not a push. In practice
-you tap while the agent is mid-task and it picks the request up within seconds, which
-reads as instant. But it is a pull, and the demo says so.
+In practice this reads as near-instant: you tap while the agent is working, and the
+`Stop` hook hands it your request the moment it finishes. But it is a pull, and the
+demo says so rather than pretending otherwise.
 
 The agent → human direction *is* a true push. Coverage lands on every screen the
 moment the reducer commits.
+
+A subscriber daemon removes even the pull — a long-running process **can** hold a
+subscription, so it can claim a request the instant it is written and spawn a headless
+agent. That also makes the map self-running: it keeps lighting up when nobody is at the
+keyboard.
 
 ---
 
@@ -184,3 +206,13 @@ exploration_request
 
 `status` is `pending` → `claimed` → `done`. Full schema in
 [`PRD-TECHNICAL.md`](PRD-TECHNICAL.md); the contract is `CONTRACT-V2.md`.
+
+## The leaderboard counts human saves
+
+Completed exploration requests: how many times a human pointed at a dark region and the
+agent found something there.
+
+Not coverage percentage. A coverage leaderboard rewards an agent that reads everything —
+which wastes context, is incomparable across repo sizes, and argues against the
+measurement this product is built on. Human saves is a real count, comparable anywhere,
+and climbing it requires using the loop.

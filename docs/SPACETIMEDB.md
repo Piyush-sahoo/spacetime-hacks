@@ -108,7 +108,35 @@ no timeout sweeper, and no presence service.
 `ctx.sender` gives the caller's identity inside every reducer, so `set_focus` knows
 whose focus to update without the client asserting who it is.
 
-## 6. Loading over the HTTP API
+## 6. The database fetches your repository itself
+
+TypeScript modules support **procedures**, which can make outbound HTTP calls and then
+write transactionally. So indexing does not need a backend — it happens inside the
+database:
+
+```typescript
+export const indexRepo = spacetimedb.procedure(
+  { owner: t.string(), repo: t.string(), token: t.string() }, t.string(),
+  (ctx, { owner, repo, token }) => {
+    const res = ctx.http.fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`);
+    const tree = res.json();
+    ctx.withTx(tx => { /* one node per source file */ });
+  }
+);
+```
+
+The GitHub trees API returns **every file path in the repository in a single call**.
+No clone, no tarball, no parser — a repo of any language lands on the map in seconds.
+
+The same mechanism calls Gemini for one-sentence summaries of dark regions, so
+unexplored territory carries meaning rather than just a filename. The key is a
+procedure argument, never stored.
+
+Parsing stays deterministic and is never delegated to a model: a hallucinated call edge
+would corrupt the exact relation this product measures.
+
+## 7. Loading a prepared corpus over the HTTP API
 
 The Python loader never opens a socket or learns a wire format. It POSTs:
 
@@ -128,7 +156,7 @@ POST /v1/database/map-room/sql
 SELECT id FROM repo WHERE slug = 'django__django-11292'
 ```
 
-## 7. Introspection without bindings
+## 8. Introspection without bindings
 
 Any client can read a module's shape at runtime:
 
@@ -159,6 +187,7 @@ what makes a universal inspector possible at all.
 | `identity_connected` / `identity_disconnected` | presence, for free |
 | `ctx.sender` | attributing focus and walk ownership without client claims |
 | `autoInc` primary keys | walk / frontier / verdict / edge ids |
+| **Procedures + `ctx.http.fetch`** | **fetching and indexing a GitHub repo, and calling Gemini — with no backend anywhere** |
 | HTTP `call/<reducer>` | the bulk loader |
 | HTTP `/sql` | reading ids back |
 | Maincloud | hosting; nothing else is deployed server-side |
@@ -176,6 +205,7 @@ This is the honest measure of what the database bought:
 - a cache, and its invalidation
 - a job queue to run the walk asynchronously
 - a way to push each hop to N clients in order
+- a service to clone and index repositories
 - any deployed backend at all
 
 The module *is* all of that.

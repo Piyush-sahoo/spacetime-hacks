@@ -66,10 +66,37 @@ Tailwind client on the SpacetimeDB TS SDK · a Python loader for the seeded grap
 
 Measurement corpus: SWE-bench Verified instances (public dataset).
 
+## How it works
+
+**There is no backend.** You paste a GitHub URL and the database itself fetches your
+repository, indexes it, and puts it on a shared live map — every file dark, because
+nobody has looked yet. Install the plugin, and everything your AI agent reads or edits
+lights up as it happens, on every screen at once. Tap a region it never opened, and the
+agent picks that up and goes to look.
+
+```mermaid
+flowchart LR
+    G["paste a<br/>GitHub URL"] -->|"procedure fetches<br/>the trees API"| DB[("SpacetimeDB")]
+    A["🤖 agent reads<br/>a file"] -->|"PostToolUse hook"| DB
+    DB -.->|"subscription"| S1["your screen<br/>lights up"]
+    DB -.->|"subscription"| S2["teammate's phone<br/>lights up"]
+    S1 -->|"tap a dark region"| DB
+    DB -.->|"Stop hook"| A2["🤖 agent goes<br/>and looks"]
+    A2 --> DB
+
+    style DB fill:#1e3a5f,color:#fff
+    style A2 fill:#166534,color:#fff
+```
+
+Every line of server logic is a reducer or a procedure inside SpacetimeDB. No API
+server, no WebSocket plumbing, no pub/sub layer, no presence service, no job queue,
+nothing deployed. Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Documentation
 
 | Doc | What's in it |
 |---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **The whole system** — the three flows, and what we didn't have to build |
 | [`docs/PROBLEM-STATEMENT.md`](docs/PROBLEM-STATEMENT.md) | The problem, the evidence, and the diagrams — the backwards walk, the per-repo spread, why a better extractor doesn't fix it |
 | [`docs/SOLUTION.md`](docs/SOLUTION.md) | What we built and why it takes this shape |
 | [`docs/AGENT-LOOP.md`](docs/AGENT-LOOP.md) | **The agent loop** — how the agent publishes its attention and how your tap reaches it |

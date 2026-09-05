@@ -263,12 +263,35 @@ An installable plugin at `plugin/` that makes the agent a participant.
 
 | Part | What it does |
 |---|---|
+| `Stop` hook | Fires when the agent finishes a turn; feeds pending requests back so it continues into the exploration with nobody typing. Closes the idle gap. |
 | `PostToolUse` hook | Matches `Read\|Edit\|Write\|Grep\|Glob`; extracts paths from the tool input; POSTs to `report_touch`. **Fire-and-forget** — ~2s timeout, errors swallowed, never blocks a turn. |
 | `UserPromptSubmit` hook | Queries pending `exploration_request` rows over `/sql` and injects them into context. Only when rows exist. |
 | Skill | The protocol: claim a request, spawn a subagent scoped to that path, explore, `complete_request`. |
 
 The agent cannot subscribe — it is turn-based. So human → agent is a **pull at turn
-boundaries**; agent → human is a true push.
+boundaries** via three hooks (`UserPromptSubmit` when you type, `Stop` when the agent
+falls silent, and optionally a subscriber daemon for instant pickup); agent → human is
+a true push.
+
+## Repo indexing — `index_repo`
+
+A **procedure** (not a reducer — procedures can make outbound HTTP calls):
+
+```
+index_repo(owner: string, repo: string, github_token: string)
+  1. ctx.http.fetch(api.github.com/repos/{o}/{r}/git/trees/HEAD?recursive=1)
+  2. filter to source extensions, skip vendor/node_modules/dist/.git
+  3. ctx.withTx -> create_repo + one node per file
+  4. qual = path minus extension, slashes -> dots   (MUST match report_touch's resolver)
+  5. edges from directory containment, capped
+  6. finish_repo
+```
+
+`truncated: true` on very large repos is recorded on the repo row and surfaced.
+Each indexed repo gets its own node-id band, because `node.id` is a global primary key.
+
+`summarize_region(node_id, api_key)` fetches file contents and asks Gemini for a
+one-sentence description, stored on the node. Summaries only — never extraction.
 
 ---
 
@@ -276,7 +299,8 @@ boundaries**; agent → human is a true push.
 
 | Constraint | Consequence |
 |---|---|
-| TypeScript (V8) modules have no procedures, column defaults, or row-level security | The loader does the fetching; the module can't call out |
+| Procedures cannot fetch while holding a transaction | fetch first, then `ctx.withTx` |
+| `ctx.http.fetch` timeout: 30s default, 180s max | use the trees API, never a clone |
 | SpacetimeDB SQL has no `GROUP BY`; aggregates need aliases | Query per-hop counts individually |
 | Reducers return nothing | Read `repo_id` back over `/sql` |
 | Browsers can't set `Authorization` on a WebSocket | Public tables, or a token via query param |
