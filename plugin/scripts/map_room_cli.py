@@ -6,6 +6,8 @@
     map_room_cli.py complete <request_id> "findings"
     map_room_cli.py coverage
     map_room_cli.py doctor
+    map_room_cli.py index [owner/repo]     build the map for this repo
+    map_room_cli.py rebind                 forget the cached repo binding
 
 Unlike the hooks, this one is allowed to be loud: it is invoked deliberately and
 its output is meant to be read.
@@ -21,9 +23,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import map_room as m  # noqa: E402
 
 
-def _ctx():
+def _ctx(bind: bool = True):
     cfg = m.load_config()
-    return cfg, m.read_token()
+    token = m.read_token()
+    if bind:
+        m.bind_repo(cfg, token, allow_network=True)
+    return cfg, token
+
+
+def _require_repo(cfg) -> bool:
+    if cfg.get("repo_id"):
+        return True
+    source = cfg.get("repo_id_source")
+    if source == "not-indexed":
+        print("%s is not indexed yet -- nothing is being reported for this repo."
+              % cfg.get("repo_slug"))
+        print("Build its map with:  python3 %s index" % os.path.abspath(__file__))
+    elif source == "no-remote":
+        print("No `origin` remote in %s, so this checkout is not bound to a map."
+              % cfg["project_dir"])
+        print("Pin one explicitly with MAP_ROOM_REPO_ID=<id> or .map-room.json.")
+    else:
+        print("Could not resolve a repo (%s). Nothing reported." % source)
+    return False
 
 
 def cmd_pending(argv) -> int:
@@ -58,8 +80,44 @@ def cmd_complete(argv) -> int:
     return _report("completed request #%s" % argv[0], out)
 
 
+def cmd_index(argv) -> int:
+    """Build the map for a GitHub repo. ~3s regardless of repo size."""
+    cfg, token = _ctx(bind=False)
+    slug = argv[0] if argv else m.parse_remote_slug(m.git_remote_url(cfg["project_dir"]))
+    if not slug or "/" not in slug:
+        print("usage: map_room_cli.py index <owner/repo>   (no origin remote to infer from)",
+              file=sys.stderr)
+        return 2
+    print("Indexing %s ..." % slug)
+    out = m.index_repo(cfg, token, slug)
+    text = str(out or "").strip()
+    if text.startswith("HTTP ") or text.startswith("ERROR:"):
+        print("FAILED: %s" % text, file=sys.stderr)
+        return 1
+    # Confirm against the slug we actually asked for -- not against whatever
+    # this working directory's remote happens to be.
+    m.clear_bind_cache(cfg["project_dir"])
+    repo_id, reached = m.lookup_repo_id(cfg, token, slug)
+    if repo_id:
+        print("Indexed. %s is repo_id %s." % (slug, repo_id))
+        return 0
+    print("%s was not indexed -- no repo row exists for it.%s"
+          % (slug, "" if reached else " (could not reach the database)"),
+          file=sys.stderr)
+    return 1
+
+
+def cmd_rebind(argv) -> int:
+    cfg, _ = _ctx(bind=False)
+    removed = m.clear_bind_cache(cfg["project_dir"])
+    print("Cleared %d cached binding(s) for %s." % (removed, cfg["project_dir"]))
+    return cmd_doctor([])
+
+
 def cmd_coverage(argv) -> int:
     cfg, token = _ctx()
+    if not _require_repo(cfg):
+        return 1
     # Scope the denominator to this repo: `node` holds every repo's graph, so an
     # unscoped COUNT(*) silently divides by the whole database.
     total = _scalar(m.sql(
@@ -96,7 +154,10 @@ def cmd_doctor(argv) -> int:
     cfg, token = _ctx()
     print("host        : %s" % cfg["host"])
     print("database    : %s" % cfg["db"])
-    print("repo_id     : %s" % cfg["repo_id"])
+    print("repo_id     : %s  (%s)" % (cfg.get("repo_id") or "UNBOUND -- reporting nothing",
+                                       cfg.get("repo_id_source")))
+    print("repo_slug   : %s" % (cfg.get("repo_slug") or "-"))
+    print("git remote  : %s" % (m.git_remote_url(cfg["project_dir"]) or "-"))
     print("agent_name  : %s" % cfg["agent_name"])
     print("project_dir : %s" % cfg["project_dir"])
     print("token       : %s" % ("found (%d chars)" % len(token) if token else "MISSING -- run `spacetime login`"))
@@ -139,6 +200,8 @@ COMMANDS = {
     "complete": cmd_complete,
     "coverage": cmd_coverage,
     "doctor": cmd_doctor,
+    "index": cmd_index,
+    "rebind": cmd_rebind,
 }
 
 

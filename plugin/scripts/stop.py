@@ -89,6 +89,12 @@ def main() -> int:
     cfg = map_room.load_config(cwd)
     token = map_room.read_token()
 
+    # An unbound checkout has no map, so it can have no requests. Cached, so
+    # this costs a stat in the normal case.
+    map_room.bind_repo(cfg, token, allow_network=True)
+    if not cfg.get("repo_id"):
+        return 0
+
     # ---- guard 3: only genuinely pending rows -------------------------------
     try:
         rows = map_room.pending_requests(cfg, token, limit=MAX_REQUESTS * 4) or []

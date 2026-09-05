@@ -39,6 +39,14 @@ def main() -> int:
     cfg = map_room.load_config(cwd)
     token = map_room.read_token()
 
+    # This hook is already synchronous, so it is the right place to do the
+    # (cached) repo binding for the session. An unbound checkout gets no
+    # heartbeat and no query -- it is not on anybody's map.
+    map_room.bind_repo(cfg, token, allow_network=True)
+    if not cfg.get("repo_id"):
+        _hint(map_room, cfg, session)
+        return 0
+
     _heartbeat(map_room, cfg, token, session)
 
     query = (
@@ -57,6 +65,16 @@ def main() -> int:
         }
     }))
     return 0
+
+
+def _hint(map_room, cfg, session) -> None:
+    """Tell the user once, per session, that this repo has no map yet."""
+    text = map_room.index_hint(cfg, os.path.dirname(os.path.abspath(__file__)))
+    if not text:
+        return
+    if not map_room.once("index-hint", "%s-%s" % (session, cfg.get("repo_slug"))):
+        return
+    print(json.dumps({"systemMessage": text, "suppressOutput": True}))
 
 
 def _render(rows: list, cfg: dict) -> str:

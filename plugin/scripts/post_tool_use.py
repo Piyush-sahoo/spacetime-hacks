@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """PostToolUse hook — report what the agent just touched to The Map Room.
 
-Matched against Read|Edit|Write|Grep|Glob. Reads the hook payload on stdin,
-pulls file paths out of it, makes them repo-relative and POSTs them to the
-`report_touch` reducer.
+Matched against Read|Edit|Write|Grep|Glob|Bash. Reads the hook payload on
+stdin, pulls file paths out of it (for Bash, out of the command string), makes
+them repo-relative and POSTs them to the `report_touch` reducer.
 
 Contract, absolutely non-negotiable: this must never block the agent's turn and
 must never fail it. The network call happens in a detached child process; the
 parent exits 0 within milliseconds. Every error is swallowed.
+
+Repo binding is part of that contract. The parent only ever consults the local
+binding cache -- it never runs git or HTTP itself. On a cache miss it hands the
+whole job (resolve, then report) to the detached child, so the very first tool
+call in a fresh checkout is neither lost nor slow. If the checkout has no
+origin remote, or its remote is not indexed, nothing is reported at all.
 
 Run with --debug to do it synchronously and print what happened.
 """
@@ -61,10 +67,27 @@ def main() -> int:
         return 0
 
     cfg = map_room.load_config(cwd)
-    log("tool=%s session=%s project=%s" % (tool_name, session, cfg["project_dir"]))
+
+    # WHICH agent this was. Subagents INHERIT the parent's session_id, so the
+    # session cannot tell them apart — but `agent_id` is present ONLY for a
+    # subagent. Carry it inside `agent_name` (`claude` vs `claude/<actor>`) so
+    # the map can colour each agent separately without changing report_touch's
+    # signature, which would have broken every already-installed plugin.
+    agent_id = payload.get("agent_id") or payload.get("agentId") or ""
+    agent_type = payload.get("agent_type") or payload.get("agentType") or ""
+    if agent_id:
+        actor = str(agent_id)[:8]
+        if agent_type:
+            actor = "%s~%s" % (str(agent_type)[:24], actor)
+        cfg["agent_name"] = "%s/%s" % (cfg["agent_name"], actor)
+
+    log("tool=%s session=%s agent=%s project=%s"
+        % (tool_name, session, cfg["agent_name"], cfg["project_dir"]))
 
     try:
-        paths = map_room.extract_paths(tool_name, tool_input, tool_response)
+        paths = map_room.extract_paths(
+            tool_name, tool_input, tool_response, cfg["project_dir"],
+        )
         paths = map_room.to_repo_relative(paths, cfg["project_dir"])
     except Exception as exc:
         log("extract failed: %s" % exc)
@@ -76,12 +99,35 @@ def main() -> int:
 
     token = map_room.read_token()
 
+    # Cache-only in the parent: no git subprocess, no HTTP, no latency.
+    map_room.bind_repo(cfg, token, allow_network=DEBUG)
+    log("repo_id=%s slug=%s source=%s" % (
+        cfg.get("repo_id"), cfg.get("repo_slug"), cfg.get("repo_id_source")))
+
+    if not cfg.get("repo_id") and cfg.get("repo_id_source") != "deferred":
+        # Known-unbound: no remote, or a remote nobody has indexed. Say so once
+        # per session and then be completely silent.
+        _hint(map_room, cfg, session)
+        return 0
+
     if DEBUG:
         print(map_room.report_touch(cfg, token, session, tool_name, paths))
         return 0
 
     _fire_and_forget(map_room, cfg, token, session, tool_name, paths)
     return 0
+
+
+def _hint(map_room, cfg, session) -> None:
+    """One line, once per session, telling the user how to get a map."""
+    text = map_room.index_hint(cfg, os.path.dirname(os.path.abspath(__file__)))
+    if not text:
+        return
+    if not map_room.once("index-hint", "%s-%s" % (session, cfg.get("repo_slug"))):
+        return
+    log(text)
+    if not DEBUG:
+        print(json.dumps({"systemMessage": text, "suppressOutput": True}))
 
 
 def _fire_and_forget(map_room, cfg, token, session, tool_name, paths) -> None:
@@ -112,10 +158,35 @@ def _fire_and_forget(map_room, cfg, token, session, tool_name, paths) -> None:
     except Exception:
         pass
     try:
-        map_room.report_touch(cfg, token, session, tool_name, paths)
+        _resolve_and_report(map_room, cfg, token, session, tool_name, paths)
     except Exception:
         pass
     os._exit(0)
+
+
+def _resolve_and_report(map_room, cfg, token, session, tool_name, paths) -> None:
+    """Runs detached. Free to hit git and the network; nothing waits on it."""
+    if not cfg.get("repo_id"):
+        map_room.bind_repo(cfg, token, allow_network=True)
+    if not cfg.get("repo_id"):
+        _autoindex(map_room, cfg, token)
+    if cfg.get("repo_id"):
+        map_room.report_touch(cfg, token, session, tool_name, paths)
+
+
+def _autoindex(map_room, cfg, token) -> None:
+    """Opt-in (MAP_ROOM_AUTOINDEX=1). Builds the map for an un-indexed remote,
+    once per slug, from inside the detached child. Off by default: indexing is
+    a ~3 second write of a whole new repo graph into a shared database, and
+    that should be a decision, not a side effect of opening a folder."""
+    slug = cfg.get("repo_slug")
+    if not (cfg.get("autoindex") and slug and cfg.get("repo_id_source") == "not-indexed"):
+        return
+    if not map_room.once("autoindex", slug):
+        return
+    map_room.index_repo(cfg, token, slug)
+    map_room.clear_bind_cache(cfg.get("project_dir"))
+    map_room.bind_repo(cfg, token, allow_network=True)
 
 
 if __name__ == "__main__":
