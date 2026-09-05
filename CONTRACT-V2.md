@@ -107,9 +107,16 @@ A real installable plugin at `plugin/` in this repo:
 - A SKILL that documents the protocol for the agent: claim a request, spawn a
   subagent scoped to that path, report findings, complete the request.
 
-HTTP surface (already verified):
+HTTP surface (verified against the DEPLOYED module):
   POST https://maincloud.spacetimedb.com/v1/database/map-room/call/<reducer>
-       body = positional JSON array; note rows_json / paths_json is a JSON STRING
+       body = positional JSON array.
+       *** u64 ARGS MUST BE JSON NUMBERS, NOT STRINGS ***
+       ["1", ...]  ->  400 invalid type: string "1", expected u64
+       correct:    [2, "sess-id", "claude", "Read", "[\"django/forms/fields.py\"]"]
+       paths_json / rows_json is DOUBLE-ENCODED: a JSON array *string*
+       inside the positional array.
+       ARG ORDER DIFFERS: report_touch(repo_id FIRST, ...) but
+       agent_heartbeat(session, agent_name, repo_id LAST).
   POST https://maincloud.spacetimedb.com/v1/database/map-room/sql
   Auth: Bearer token from ~/.config/spacetime/cli.toml
 
