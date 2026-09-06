@@ -195,12 +195,109 @@ function Activity({ rows, seen, selected, onPickStep, cursor, covState, sessionF
   )
 }
 
+/* ── THE ASK ──────────────────────────────────────────────────────────────── */
+
+/**
+ * WHAT SHOULD THE AGENT DO HERE.
+ *
+ * `request_exploration(repo_id, node_id, note)` has always carried a note, and
+ * `map_room.py` has always printed it back to the agent as `note: "..."` inside
+ * the pending list the hooks inject. The one thing missing was somewhere for a
+ * human to write it, so the UI sent the file path and the agent was told to go
+ * look at a file it had already been given the path of.
+ *
+ * This is that somewhere. It sits under the file's own sentence, on the panel
+ * that is already the "this block" surface, so the question and the answer to
+ * "what is this file" are read in one place before the ask is written.
+ *
+ * SENDING NOTHING IS A REAL ANSWER. Somebody who just wants to flag a region
+ * presses Return on an empty line and the path goes as the note, which is
+ * exactly what the click used to do on its own.
+ */
+const NOTE_CAP = 200
+
+function Compose({ f, armed, onSend }) {
+  const [text, setText] = useState('')
+  const ref = useRef(null)
+
+  // A click on the plate ARMS this line. Focusing it is the whole point of the
+  // arming: the click and the first keystroke should be one gesture. `armed` is
+  // the click's timestamp, so clicking the same block twice re-fires this.
+  useEffect(() => { if (armed) ref.current?.focus() }, [armed])
+
+  const n = text.trim().length
+  const over = n > NOTE_CAP
+
+  const send = () => {
+    const typed = text.trim().slice(0, NOTE_CAP)
+    onSend(typed || f.path, !!typed)
+    setText('')
+  }
+
+  return (
+    <div className="ask">
+      <p className="eyebrow" style={{ margin: '0 0 6px' }}>Ask for this region</p>
+      <div className="askrow">
+        <input
+          ref={ref}
+          className="askin"
+          type="text"
+          value={text}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="what should the agent do here?"
+          aria-label="What should the agent do here?"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); send(); return }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              if (text) setText('')
+              else e.currentTarget.blur()
+            }
+          }}
+        />
+        <button className="ctl primary" onClick={send}>Send</button>
+      </div>
+      <p className="askhint">
+        {over
+          ? `${n}/${NOTE_CAP} — over the cap. The agent is handed the first ${NOTE_CAP} characters.`
+          : n
+            ? `${n}/${NOTE_CAP} · Return sends · Esc clears`
+            : 'Return sends · Esc clears · send it empty to just flag the region'}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * IT IS ON THE QUEUE. The row itself arrives off the subscription a moment
+ * later, in this tab and in every other one; `sent` only covers the gap between
+ * the reducer call and the row landing, so nothing here is ever a local
+ * pretence about server state for longer than one round trip.
+ */
+function Asking({ req, sent, path }) {
+  const note = String((req && req.note) || sent || '').trim()
+  const wrote = note && note !== path && note !== String((req && req.path) || '')
+  return (
+    <div className="ask">
+      <p className="eyebrow" style={{ margin: 0 }}>
+        On the queue · {req ? String(req.status).toUpperCase() : 'SENT'}
+      </p>
+      {wrote
+        ? <p className="qask">{note}</p>
+        : <p className="askhint">No instruction — the region is flagged for a look.</p>}
+    </div>
+  )
+}
+
 /* ── WHAT IT DOES ─────────────────────────────────────────────────────────── */
 
 function What({
   selected, atlas, territory, coverage, requestsByFile, requestExploration, canRequest, onSelect,
   dirMeta, districtStats, adjacency,
 }) {
+  // Keyed by path, so a confirmation can never leak onto the next block.
   const [sent, setSent] = useState(null)
 
   if (!selected) {
@@ -210,8 +307,9 @@ function What({
         <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>
           Click a block on the plate for what that file does, or the dashed
           boundary around it for what the whole directory is for. A <b>dashed</b>
-          block is one no agent has ever opened — click it to ask for it, and the
-          request appears in every other tab immediately.
+          block is one no agent has ever opened — click it and a line opens here
+          for what you want done there. The request appears in every other tab
+          immediately.
         </p>
       </>
     )
@@ -352,6 +450,7 @@ function What({
   const dark = lit === 0
   const req = requestsByFile.get(b.fi)
   const open = req && req.status !== 'done'
+  const justSent = sent && sent.path === f.path ? sent.note : null
   // WHEN it was last touched, and WHO touched it — two facts, two channels,
   // exactly as the plate draws them.
   const stateNow = Date.now()
@@ -404,23 +503,29 @@ function What({
         </p>
       )}
 
+      {/*
+        THE ASK SITS ABOVE THE BLAST RADIUS, not under it. The radius is a list
+        that can run to a screenful, and burying the one thing a dark block is
+        for under a scroll is how it stops being used.
+      */}
+      {(open || justSent) ? (
+        <Asking req={open ? req : null} sent={justSent} path={f.path} />
+      ) : (dark && canRequest ? (
+        <Compose
+          key={f.path}
+          f={f}
+          armed={selected.ask || 0}
+          onSend={(note) => {
+            requestExploration(f.pick, note)
+            setSent({ path: f.path, note })
+            setTimeout(() => setSent((p) => (p && p.path === f.path ? null : p)), 6000)
+          }}
+        />
+      ) : null)}
+
       <Blast fi={b.fi} adjacency={adjacency} atlas={atlas} coverage={coverage} onSelect={onSelect} />
 
       <div className="actions">
-        {dark && canRequest && !open && (
-          <button
-            className="ctl primary"
-            onClick={() => {
-              requestExploration(f.pick, f.path)
-              setSent(f.path)
-              setTimeout(() => setSent((p) => (p === f.path ? null : p)), 3200)
-            }}
-          >
-            Ask for this region
-          </button>
-        )}
-        {open && <span className="chip static">{String(req.status).toUpperCase()}</span>}
-        {sent === f.path && <span className="chip static">SENT</span>}
         <button className="ctl" onClick={() => onSelect(null)}>Clear</button>
       </div>
     </>
@@ -599,9 +704,9 @@ function Asked({ requests, territory }) {
       <>
         <h3 className="sec" style={{ marginTop: 0 }}>Nothing asked yet</h3>
         <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-          Click a dashed block to put a region on this queue. Anyone watching the
-          map sees it appear; an agent claims it, explores it, and the region
-          comes back lit.
+          Click a dashed block, say what you want done there, and it goes on this
+          queue. Anyone watching the map sees it appear; an agent claims it, does
+          what was asked, and the region comes back lit.
         </p>
       </>
     )
@@ -614,6 +719,14 @@ function Asked({ requests, territory }) {
           const fi = territory.byNode.get(key(r.nodeId))
           const f = fi === undefined ? null : territory.files[fi]
           const cls = r.status === 'done' ? 'res' : r.status === 'claimed' ? 'to' : ''
+          // THREE DIFFERENT THINGS, and only one of them is what was ASKED.
+          // A note that is just the path is the empty submit — the row already
+          // prints the path on its heading, and printing it twice is what was
+          // taken off this row once already.
+          const note = String(r.note || '').trim()
+          const asked = note && note !== String(r.path || '') && note !== (f ? f.path : '')
+            ? note
+            : null
           return (
             <li key={key(r.id)} className={cls}>
               {/*
@@ -637,6 +750,10 @@ function Asked({ requests, territory }) {
                   {` · ${ago(tsMs(r.at))}`}
                 </span>
               </div>
+              {/* WHAT WAS ASKED comes first and reads in full ink against a
+                  rule: it is the instruction a person wrote, not a sentence
+                  about the file and not the agent's answer. */}
+              {asked && <p className="qask" title="What was asked">{asked}</p>}
               {r.result
                 ? <Finding text={r.result} />
                 : (f && f.summary

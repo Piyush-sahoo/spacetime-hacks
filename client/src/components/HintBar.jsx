@@ -16,7 +16,7 @@ export default function HintBar({ scope }) {
       <span>← Come out</span>
       <span>Enter Step one call</span>
       <span>Space Play/pause</span>
-      <span>Click a dashed block to ask</span>
+      <span>Click a dashed block, then type the ask</span>
       <span style={{ marginLeft: 'auto' }}>
         {scope ? `${scope} · ` : ''}
         {atlas.districts.length} dirs · {coverage.exploredFiles}/{coverage.totalFiles} explored ·{' '}

@@ -22,7 +22,7 @@ import HintBar from './HintBar.jsx'
  */
 export default function Room({ onLeave }) {
   const {
-    atlas, timeline, coverage, territory, requestsByFile, requestExploration,
+    atlas, timeline, coverage, requestsByFile,
     canRequest, actors, meta, isMock, retry, toggleDistrict, collapsed,
   } = useRoom()
 
@@ -49,24 +49,36 @@ export default function Room({ onLeave }) {
   }, [atlas, scope])
 
   // ── selection ─────────────────────────────────────────────────────────────
+  /**
+   * CLICKING A DARK BLOCK OPENS THE ASK; IT NO LONGER FIRES IT.
+   *
+   * The request has always carried a `note` and the agent has always been read
+   * that note — the map just never gave anybody a place to write one, so it
+   * sent the path and the ASKED tab printed the path twice. A click now ARMS
+   * the compose line in WHAT IT DOES (`selected.ask`), which focuses itself and
+   * sends what was typed. Sending nothing still sends the path, so flagging a
+   * region is one click and a Return, exactly as before.
+   *
+   * Only a DARK block arms. A lit one selects and nothing else: there is
+   * nothing to ask for on ground an agent has already walked.
+   */
   const pickBlock = useCallback((id, opts) => {
     const ask = !!(opts && opts.ask)
     if (!id) { setSelected(null); return }
     const b = sceneBlocks.find((x) => x.id === id)
-    setSelected({ kind: 'block', id })
     // A collapsed district is a door, not a file: clicking it opens the
     // directory rather than selecting or asking about anything inside.
-    if (b && b.collapsed) { toggleDistrict(b.district); return }
+    if (b && b.collapsed) { setSelected({ kind: 'block', id }); toggleDistrict(b.district); return }
     setTab('what')
-    if (!b || b.fi === undefined) return
-    // A dark block IS the ask. Clicking one puts the region on the queue, and
-    // the request lands in every other tab off the subscription.
-    if (!ask || !canRequest) return
-    if (coverage.lit[b.fi] > 0) return
+    if (!b || b.fi === undefined) { setSelected({ kind: 'block', id }); return }
     const open = requestsByFile.get(b.fi)
-    if (open && open.status !== 'done') return
-    requestExploration(territory.files[b.fi].pick, territory.files[b.fi].path)
-  }, [sceneBlocks, canRequest, coverage, requestsByFile, requestExploration, territory, toggleDistrict])
+    const askable = ask && canRequest
+      && coverage.lit[b.fi] === 0
+      && !(open && open.status !== 'done')
+    // A TOKEN, NOT A FLAG. Clicking the same dark block again should put the
+    // cursor back in the line; a boolean that is already true fires no effect.
+    setSelected({ kind: 'block', id, ask: askable ? Date.now() : 0 })
+  }, [sceneBlocks, canRequest, coverage, requestsByFile, toggleDistrict])
 
   /**
    * A CLICK ON THE BOUNDARY, not on a block.
