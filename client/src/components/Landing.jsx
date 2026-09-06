@@ -34,28 +34,6 @@ export default function Landing() {
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
-  /**
-   * THE COUNTER IS THE PRODUCT, IN MINIATURE.
-   *
-   * Every number here is counted from the same subscription the maps are drawn
-   * from — so it moves for the same reason they do. Somebody indexing a repo in
-   * another country moves REPOSITORIES while you are reading the page, and
-   * nobody refreshed anything. That is the claim the page makes in prose two
-   * paragraphs down, made instead by a number that ticks.
-   *
-   * A row with no files is a failed index rather than a map, and is not counted
-   * — the same rule the gallery uses, or the two disagree in front of a person.
-   */
-  const counts = useMemo(() => {
-    const size = (r) => Number(r.nodeCount ?? r.node_count ?? 0)
-    const live = (repos || []).filter((r) => size(r) > 0 && r.slug)
-    return {
-      repos: live.length,
-      files: live.reduce((n, r) => n + size(r), 0),
-      watching: (participants || []).filter((p) => p.online).length,
-    }
-  }, [repos, participants])
-
   /** Slugs already on the map, so "already indexed" can be said as a fact. */
   const known = useMemo(() => {
     const m = new Map()
@@ -76,6 +54,26 @@ export default function Landing() {
       .filter((r) => size(r) > 0 && r.slug)
       .map((r) => ({ slug: String(r.slug), nodes: size(r) }))
   }, [repos])
+
+  /**
+   * THE COUNTER IS THE PRODUCT, IN MINIATURE.
+   *
+   * Every number here is counted from the same subscription the maps are drawn
+   * from — so it moves for the same reason they do. Somebody indexing a repo in
+   * another country moves REPOSITORIES while you are reading the page, and
+   * nobody refreshed anything. That is the claim the page makes in prose two
+   * paragraphs down, made instead by a number that ticks.
+   *
+   * It is derived from `shown` — the very list the gallery renders — rather than
+   * re-filtering `repos` alongside it. Two copies of "a row with no files is a
+   * failed index, not a map" is two chances to drift, and the failure would be a
+   * counter contradicting the grid directly beneath it, in front of a person.
+   */
+  const counts = useMemo(() => ({
+    repos: shown.length,
+    files: shown.reduce((n, r) => n + r.nodes, 0),
+    watching: (participants || []).filter((p) => p.online).length,
+  }), [shown, participants])
 
   /**
    * The range on the map, in one clause, counted from the map.
