@@ -30,9 +30,19 @@ export const pts = (a) => a.map((p) => p.join(',')).join(' ')
 
 /** Footprint side, and the pitch it is placed on (one unit of street). */
 const BW = 2
-const CELL = 3
-/** Gap between district plates. */
-const GAP = 2
+/**
+ * Street width.
+ *
+ * At 3 a block's 2-unit footprint left one unit of gap, and at the zoom people
+ * actually read the map at, one unit is nothing: the extruded sides of a tall
+ * block ran into its neighbour and the paper name tags underneath overlapped
+ * each other. Blocks are the thing being read, so they get room to be read —
+ * 4.5 puts two and a half units between footprints and lets every tag sit clear.
+ */
+const CELL = 4.5
+/** Gap between district plates — wider than a street, so a district edge reads
+ *  as a boundary rather than as one more row of blocks. */
+const GAP = 3.5
 
 /**
  * RESERVED SLACK — why a file appearing does not move the map.
