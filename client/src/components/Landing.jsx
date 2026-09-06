@@ -18,7 +18,7 @@ const READ_MS = 60000
 const REPO = 'https://github.com/Piyush-sahoo/spacetime-hacks'
 
 export default function Landing() {
-  const { repos, participants, store } = useRoom()
+  const { repos, participants } = useRoom()
   const [text, setText] = useState('')
   const [phase, setPhase] = useState('idle') // idle | working | done | failed
   const [progress, setProgress] = useState(0)
