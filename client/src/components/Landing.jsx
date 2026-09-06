@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRoom } from '../lib/room.jsx'
-import { indexRepo, enrichAll, summarizeDirsAll, rememberedKey, rememberKey } from '../lib/live'
+import { indexRepo, enrichAll, summarizeDirsAll, rememberedKey } from '../lib/live'
 import { isGithubSlug, parseIndexResult, parseRepoInput, projectLink, projectsLink } from '../lib/funnel'
 import { Shell, go } from './FunnelKit.jsx'
 import ConnBadge from './ConnBadge.jsx'
+import HeroMap, { MapLegend } from './HeroMap.jsx'
+import PreviewMaps from './PreviewMaps.jsx'
 
 /** Roughly how long indexing takes, whatever the repo size. Used only to
  *  animate an honest bar — the answer, not the clock, is what ends it. */
 const EXPECTED_MS = 3400
+
+/** Where the method behind the one measured number on this page is written down. */
+const REPO = 'https://github.com/Piyush-sahoo/spacetime-hacks'
 
 export default function Landing() {
   const { repos } = useRoom()
@@ -19,7 +24,7 @@ export default function Landing() {
   const inputRef = useRef(null)
   const timers = useRef([])
   // The second pass, when a key is remembered. null until it starts.
-  const [enrich, setEnrich] = useState(null)
+  const [, setEnrich] = useState(null)
   const stopEnrich = useRef(false)
   useEffect(() => () => { stopEnrich.current = true }, [])
 
@@ -35,27 +40,31 @@ export default function Landing() {
   /**
    * What is on the map, counted from the map.
    *
-   * This sentence used to be typed in ("Ten repositories..."), and it went
-   * stale the first time anybody indexed anything -- which is the one thing
-   * this page invites every visitor to do. It is the same rule the rest of the
-   * funnel follows: never state a number the database did not just report.
+   * Never a number that was typed in. A row with no files is a failed index
+   * rather than a map — the gallery filters those out, so this filters them out
+   * too, or the two pages disagree in front of the person.
    */
-  const alreadyHere = useMemo(() => {
-    // A row with no files is a failed index, not a map -- the gallery filters
-    // those out, so the count here has to filter them out too or the two pages
-    // disagree in front of the person.
-    const shown = (repos || []).filter((r) => Number(r.nodeCount ?? r.node_count ?? 0) > 0)
-    if (!shown.length) return 'Repositories that have already been indexed are in the gallery.'
+  const shown = useMemo(() => {
     const size = (r) => Number(r.nodeCount ?? r.node_count ?? 0)
-    // Name the biggest REAL `owner/repo`, never a SWE-bench instance id like
-    // `django__django-10097`: it is the largest row, but nobody recognises it,
-    // and the gallery already ranks a real slug ahead of one for that reason.
-    const named = shown.filter((r) => isGithubSlug(r.slug))
-    const big = (named.length ? named : shown).reduce((a, b) => (size(b) > size(a) ? b : a))
-    const small = Math.min(...shown.map(size))
-    return `${shown.length} repositories are already on the map, from a ${small}-file `
-      + `library to ${big.slug} at ${size(big).toLocaleString()} files.`
+    return (repos || [])
+      .filter((r) => size(r) > 0 && r.slug)
+      .map((r) => ({ slug: String(r.slug), nodes: size(r) }))
   }, [repos])
+
+  /**
+   * The range on the map, in one clause, counted from the map.
+   *
+   * Never a number that was typed in. The biggest is named as a REAL
+   * `owner/repo` rather than a SWE-bench instance id like `django__django-10097`
+   * — it is the largest row, but nobody recognises it.
+   */
+  const range = useMemo(() => {
+    if (!shown.length) return ''
+    const named = shown.filter((r) => isGithubSlug(r.slug))
+    const big = (named.length ? named : shown).reduce((a, b) => (b.nodes > a.nodes ? b : a))
+    const small = Math.min(...shown.map((r) => r.nodes))
+    return `From a ${small}-file library to ${big.slug} at ${big.nodes.toLocaleString()} files.`
+  }, [shown])
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -140,63 +149,24 @@ export default function Landing() {
 
   return (
     <Shell nav={<ConnBadge />}>
+      {/* ── 1 · the map ───────────────────────────────────────────────────── */}
       <span className="eyebrow">One room · every tab sees the same map</span>
       <h1>Watch the map your agent is actually using.</h1>
 
       <p className="fn-lede">
-        Every file in your repository is a block on one map. The moment your agent
-        reads a file, that block lights — on every screen watching, at the same
-        moment. Not a refresh and not a poll: the tool call goes into SpacetimeDB
-        and straight back out to every connected tab.
+        Every file is a block. It lights the moment your agent reads it, on every
+        screen watching, at the same moment.
       </p>
 
-      <h2>Why a map at all</h2>
+      <HeroMap />
 
-      <p>
-        An agent fixes a bug by walking from the code it can see to the test that
-        guards the fix. So the question worth measuring is a plain one: does that
-        walk arrive? We measured it on <strong>172 human-verified bug fixes across
-        7 repositories</strong>.
+      <p className="fn-cap">
+        <span className="fn-k">A demonstration</span>
+        Real files from this repository, on a scripted walk. The live maps are in
+        the gallery; the form below makes one out of yours.
       </p>
 
-      <div className="fn-scroll">
-        <table className="fn-facts-table">
-          <thead>
-            <tr><th>How the call graph was built</th><th>Reaches the guarding test</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Name-matched</td><td className="fn-n">31.4%</td></tr>
-            <tr><td>Type-resolved</td><td className="fn-n">41.9%</td></tr>
-            <tr><td>On matplotlib and pytest, either way</td><td className="fn-n">0%</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p>
-        And an agent's context is finite, so a repo map keeps only the top-K
-        symbols and drops the rest. At <span className="fn-num">400</span> symbols
-        kept it reaches <span className="fn-num">2</span> of{' '}
-        <span className="fn-num">44</span> guarding tests. At{' '}
-        <span className="fn-num">200</span> or fewer, zero.
-      </p>
-
-      <p>
-        That is what this is for. It does not make the walk arrive more often. It
-        shows you where your agent has actually been, so the parts it never reaches
-        stop being invisible to you.
-      </p>
-
-      <div className="fn-warn">
-        <span className="fn-k">One number we will not print</span>
-        <p style={{ margin: 0 }}>
-          Recall on <em>your</em> repository. It is not computable without labelled
-          fixes, and we are not going to invent one. The map reports what was
-          explored. It does not claim what was missed.
-        </p>
-      </div>
-
-      <h2>Put your repository on the map</h2>
-
+      {/* ── the conversion action ─────────────────────────────────────────── */}
       <form className="fn-form" onSubmit={submit}>
         <input
           ref={inputRef}
@@ -216,10 +186,8 @@ export default function Landing() {
       </form>
 
       <p className="fn-why" style={{ marginTop: 8 }}>
-        Reads the repository's public file tree from GitHub and builds the graph
-        inside the database. About three and a half seconds whatever the size —
-        django/django is 7,087 files and lands in under four. Public repositories
-        only. Nothing is cloned, and no token is sent.
+        Public repositories, about three and a half seconds whatever the size.
+        Nothing is cloned and no token is sent.
       </p>
 
       {busy && (
@@ -228,8 +196,7 @@ export default function Landing() {
             <i style={{ width: `${progress}%` }} />
           </div>
           <p className="fn-why" style={{ margin: 0 }}>
-            Fetching the tree from GitHub and building the graph. This usually
-            takes about 3.4 seconds.
+            Fetching the tree from GitHub and building the graph.
           </p>
         </>
       )}
@@ -244,14 +211,77 @@ export default function Landing() {
         </div>
       )}
 
-      <h2>Or just look at one that is already here</h2>
-      <p>{alreadyHere}</p>
+      {/* ── 2 · the previews: real maps, not pictures of them ─────────────── */}
+      <h2>{shown.length ? `${shown.length} maps are already live` : 'Maps that are already live'}</h2>
+      <PreviewMaps />
+      <p className="fn-why">
+        {range} Drawn out of the database as you look at them. Open one and you
+        are in the room, watching the same plate as everyone else in it.
+      </p>
       <div className="actions">
         <button type="button" className="ctl" onClick={() => go(projectsLink())}>
           Browse the projects
         </button>
       </div>
+
+      {/* ── 3 · the colours ───────────────────────────────────────────────── */}
+      <h2>What the colours mean</h2>
+      <MapLegend />
+
+      {/* ── 4 · the one piece of evidence ─────────────────────────────────── */}
+      <h2>Why a map, and not a summary</h2>
+      <Cliff />
+      <p className="fn-why">
+        A repo map that keeps only the top-K symbols arrives at two of the
+        forty-four guarding tests in{' '}
+        <a href={REPO} target="_blank" rel="noreferrer">our measurement</a> on a
+        400-symbol budget, and at none at all on 200.
+      </p>
+
+      {/* ── 5 · the honesty ───────────────────────────────────────────────── */}
+      <div className="fn-warn">
+        <span className="fn-k">One number we will not print</span>
+        <p style={{ margin: 0 }}>
+          Recall on <em>your</em> repository — it is not computable without
+          labelled fixes, and we are not going to invent one. The map reports
+          what was explored; it does not claim what was missed.
+        </p>
+      </div>
     </Shell>
+  )
+}
+
+/**
+ * THE CONTEXT CLIFF, as forty-four squares.
+ *
+ * The sharpest fact on the page used to be a clause inside a paragraph. It is
+ * one comparison against one denominator, so it is drawn as the denominator:
+ * forty-four guarding tests, and the ones a top-K repo map actually reaches
+ * filled in. The rest are dashed, which here means what it means everywhere
+ * else on this product — it is not there.
+ */
+const CLIFF = [
+  { budget: '400 symbols kept', reached: 2 },
+  { budget: '200 or fewer', reached: 0 },
+]
+const TOTAL = 44
+
+function Cliff() {
+  return (
+    <div className="fn-cliff">
+      {CLIFF.map((row) => (
+        <div key={row.budget} className="fn-cliff-row">
+          <span className="fn-cliff-k">{row.budget}</span>
+          <div className="fn-cells" aria-hidden="true">
+            {Array.from({ length: TOTAL }, (_, i) => (
+              <i key={i} className={i < row.reached ? 'on' : undefined} />
+            ))}
+          </div>
+          <span className="fn-cliff-n fn-num"><b>{row.reached}</b> of {TOTAL}</span>
+        </div>
+      ))}
+      <span className="fn-cliff-foot">Guarding tests the walk arrives at, out of 44</span>
+    </div>
   )
 }
 

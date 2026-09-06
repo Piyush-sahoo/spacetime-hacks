@@ -176,17 +176,6 @@
   color: var(--ink-2); border: 1.5px dashed var(--rule); padding: 0 5px; align-self: flex-start;
 }
 
-/* ── the measured facts table ────────────────────────────────────────────── */
-.fn-facts-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 12px; }
-.fn-facts-table th, .fn-facts-table td {
-  border: 1.5px solid var(--rule); padding: 6px 9px; text-align: left; vertical-align: top;
-}
-.fn-facts-table th {
-  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--ink-2); font-weight: 500; background: var(--face);
-}
-.fn-facts-table td.fn-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
-
 /* ── failure modes ───────────────────────────────────────────────────────── */
 .fn-faq { list-style: none; margin: 0; padding: 0; }
 .fn-faq > li { border-bottom: 1.5px solid var(--rule); padding: 9px 0; }
@@ -229,11 +218,166 @@
 }
 .fn-matrix .fn-tag.on { background: var(--hi-bg); color: var(--hi-fg); border-color: var(--hi-bg); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE HERO — a map, above the fold.
+
+   The page used to argue that "every file is a block on one map, and it lights
+   the moment your agent reads it" and then show nothing. This is the thing
+   itself: the product's own projection, its own block primitives, its own
+   colour language, framed on the paper the rest of the page is printed on.
+   ═════════════════════════════════════════════════════════════════════════ */
+.hm {
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  /* A 2:1 plate across the full 980px column is 500px tall, which pushes the
+     one thing this page is FOR — the form — under the fold on a laptop. The
+     map still leads; it just does not take the whole screen to do it. */
+  max-width: 780px;
+  margin: 10px 0 10px;
+  padding: 0;
+  overflow: hidden;
+}
+.hm-svg { display: block; width: 100%; height: auto; }
+
+/* THE ARRIVAL. One orchestrated entrance, staggered back-to-front along the
+   painter's order, and then the page is still until the walk starts. The delay
+   is set per block in the component, so this is the whole of it. */
+@keyframes hm-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hm.in .hm-b { animation: hm-rise .46s cubic-bezier(.2, .7, .3, 1) backwards; }
+
+/* The two channels of the map, transitioned rather than snapped: the walk
+   writes a quantised colour twelve times as a block cools, and these carry the
+   eye across the steps between. Nothing else on the page transitions. */
+.hm .ib-face { transition: fill .42s linear, fill-opacity .42s linear; }
+.hm .ib-hatch { transition: opacity .3s linear; }
+.hm .hm-edge, .hm .hm-halo, .hm .hm-land { transition: opacity .28s linear; }
+.hm .hm-pkt { will-change: transform; }
+
+/* The paper name tag under a block's front corner. DASHED AND GHOSTED MEANS
+   NOBODY HAS OPENED IT — the same rule the rest of the product runs on. */
+.hm-tag rect { fill: var(--paper); stroke: var(--ghost); stroke-dasharray: 3 2; }
+.hm-tag text { fill: var(--ink-2); }
+.hm-tag.on rect { stroke: var(--ink); stroke-dasharray: none; }
+.hm-tag.on text { fill: var(--ink); }
+
+/* The key under the plate. */
+.hm-key {
+  list-style: none; margin: 0; padding: 8px 10px;
+  border-top: 1.5px solid var(--ink);
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+.hm-key li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hm-key b {
+  border: 1.5px solid var(--ink); color: var(--ink); font-weight: 600;
+  letter-spacing: 0; padding: 0 4px; font-size: 9.5px; flex: none;
+}
+
+/* A block that is legible and STILL. No arrival, no transitions, and the
+   component paints the end of the walk once instead of running a loop. */
+@media (prefers-reduced-motion: reduce) {
+  .hm.in .hm-b { animation: none; }
+  .hm .ib-face, .hm .ib-hatch, .hm .hm-edge, .hm .hm-halo, .hm .hm-land { transition: none; }
+}
+.hm.still .hm-b { animation: none; }
+.hm.still .ib-face, .hm.still .ib-hatch,
+.hm.still .hm-edge, .hm.still .hm-halo, .hm.still .hm-land { transition: none; }
+
+/* What the map is and is not, said right under it. */
+.fn-cap {
+  font-size: 11.5px; color: var(--ink-2); max-width: 62ch;
+  margin: 0 0 16px; line-height: 1.5;
+}
+.fn-cap .fn-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  background: var(--hi-bg); color: var(--hi-fg); padding: 1px 6px;
+  margin-right: 8px; white-space: nowrap;
+}
+
+/* ── the legend: real blocks, not words about them ───────────────────────── */
+.hm-legend { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 0; }
+.hm-legend > li {
+  display: grid; grid-template-columns: 46px minmax(0, 15ch) minmax(0, 1fr);
+  align-items: center; gap: 12px;
+  border-bottom: 1.5px solid var(--rule); padding: 6px 0;
+}
+.hm-legend > li:last-child { border-bottom: none; }
+.hm-chip { width: 46px; height: 34px; display: block; overflow: visible; }
+.hm-l-name { font-size: 12px; }
+.hm-l-why { font-size: 11.5px; color: var(--ink-2); }
+
+/* ── the context cliff: forty-four squares, and the two that are lit ─────── */
+.fn-cliff { border: 1.5px solid var(--ink); padding: 12px 14px; margin: 0 0 12px; }
+.fn-cliff-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.fn-cliff-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+}
+.fn-cells { display: flex; flex-wrap: wrap; gap: 3px; }
+/* DASHED MEANS IT DOES NOT EXIST. Forty-two of these are exactly that. */
+.fn-cells > i {
+  width: 11px; height: 11px; flex: none;
+  border: 1.5px dashed var(--rule); background: none;
+}
+.fn-cells > i.on { border: 1.5px solid var(--ink); background: var(--ink); }
+.fn-cliff-n { font-size: 11.5px; color: var(--ink-2); }
+.fn-cliff-n b { color: var(--ink); font-weight: 600; font-size: 14px; }
+.fn-cliff-foot {
+  display: block; border-top: 1.5px solid var(--rule); padding-top: 8px;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+}
+
+/* ── the previews: three real maps, drawn out of the database ────────────── */
+/* Not screenshots. Each plate is the product's own renderer over one indexed
+   repository's `node` rows, and each frame is a door into that room. */
+.fn-previews {
+  display: grid; gap: 10px; margin: 0 0 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fn-preview {
+  display: flex; flex-direction: column; text-align: left; min-width: 0; padding: 0;
+  border: 1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+  background: var(--paper); color: var(--ink); font-family: var(--mono); cursor: pointer;
+}
+.fn-preview:hover { background: var(--face); }
+.fn-preview:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.fn-preview:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* DASHED MEANS IT IS NOT THERE — a frame with no map in it yet says so by
+   being dashed rather than by pretending to be one. */
+.fn-preview.fn-pending { border-style: dashed; box-shadow: none; cursor: default; }
+.fn-plate {
+  aspect-ratio: 4 / 3; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border-bottom: 1.5px solid var(--ink);
+}
+.fn-preview.fn-pending .fn-plate { border-bottom: 1.5px dashed var(--rule); }
+.fn-plate svg { width: 100%; height: 100%; display: block; color: var(--ink); }
+.fn-plate-wait {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+}
+.fn-preview .fn-slug { font-size: 12px; word-break: break-all; padding: 8px 10px 0; }
+.fn-preview .fn-facts {
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2);
+  display: flex; gap: 8px; flex-wrap: wrap; padding: 3px 10px 9px;
+}
+
 /* Anything wide scrolls inside itself. The page body never scrolls sideways. */
 .fn-scroll { overflow-x: auto; }
 
 @media (max-width: 640px) {
   .fn-links { grid-template-columns: minmax(0, 1fr); }
+  /* Two words and a block still fit; three columns do not. The reason folds
+     under the name rather than being cut off the side of the phone. */
+  .hm-legend > li { grid-template-columns: 40px minmax(0, 1fr); gap: 4px 10px; }
+  .hm-chip { width: 40px; height: 30px; }
+  .hm-l-why { grid-column: 2; }
+  .fn-previews { grid-template-columns: minmax(0, 1fr); }
+  .fn-plate { aspect-ratio: 16 / 9; }
+  .fn-cliff { padding: 10px 11px; }
+  .fn-cells > i { width: 10px; height: 10px; }
   .fn-main { padding: 18px 12px 40px; }
   .fn-top { padding: 6px 12px; }
   .fn-copy { flex-direction: column; }
