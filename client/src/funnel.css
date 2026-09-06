@@ -385,3 +385,35 @@
   .fn-copy button { padding: 6px 10px; }
   .fn-grid { grid-template-columns: 1fr; }
 }
+
+/* ── the live counter ──────────────────────────────────────────────────────
+   Counted off the same subscription the maps are drawn from, so it moves for
+   the same reason they do. The pulsing dot is the only ornament and it earns
+   its place: it is the difference between a number and a live number. */
+.livecount {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 26px;
+  margin: 18px 0 0; padding: 12px 0 0;
+  border-top: 1.5px solid var(--ink);
+}
+.livecount .lc { display: flex; align-items: baseline; gap: 7px; }
+.livecount .lc b {
+  font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+.livecount .lc i {
+  font-style: normal; font-size: 9.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.livecount .lc.dot { margin-left: auto; gap: 6px; }
+.livecount .lc.dot em {
+  width: 7px; height: 7px; background: #22c55e; border: 1.5px solid var(--ink);
+  display: inline-block; animation: lcpulse 2.4s ease-in-out infinite;
+}
+.livecount .lc.dot { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+@keyframes lcpulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) { .livecount .lc.dot em { animation: none } }
+@media (max-width: 620px) {
+  .livecount { gap: 0 18px; }
+  .livecount .lc b { font-size: 18px; }
+  .livecount .lc.dot { margin-left: 0; flex-basis: 100%; margin-top: 6px; }
+}

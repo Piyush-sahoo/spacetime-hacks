@@ -18,7 +18,7 @@ const READ_MS = 60000
 const REPO = 'https://github.com/Piyush-sahoo/spacetime-hacks'
 
 export default function Landing() {
-  const { repos } = useRoom()
+  const { repos, participants, store } = useRoom()
   const [text, setText] = useState('')
   const [phase, setPhase] = useState('idle') // idle | working | done | failed
   const [progress, setProgress] = useState(0)
@@ -33,6 +33,28 @@ export default function Landing() {
   useEffect(() => () => { stopEnrich.current = true }, [])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
+
+  /**
+   * THE COUNTER IS THE PRODUCT, IN MINIATURE.
+   *
+   * Every number here is counted from the same subscription the maps are drawn
+   * from — so it moves for the same reason they do. Somebody indexing a repo in
+   * another country moves REPOSITORIES while you are reading the page, and
+   * nobody refreshed anything. That is the claim the page makes in prose two
+   * paragraphs down, made instead by a number that ticks.
+   *
+   * A row with no files is a failed index rather than a map, and is not counted
+   * — the same rule the gallery uses, or the two disagree in front of a person.
+   */
+  const counts = useMemo(() => {
+    const size = (r) => Number(r.nodeCount ?? r.node_count ?? 0)
+    const live = (repos || []).filter((r) => size(r) > 0 && r.slug)
+    return {
+      repos: live.length,
+      files: live.reduce((n, r) => n + size(r), 0),
+      watching: (participants || []).filter((p) => p.online).length,
+    }
+  }, [repos, participants])
 
   /** Slugs already on the map, so "already indexed" can be said as a fact. */
   const known = useMemo(() => {
@@ -168,6 +190,24 @@ export default function Landing() {
       {/* ── 1 · the map ───────────────────────────────────────────────────── */}
       <span className="eyebrow">One room · every tab sees the same map</span>
       <h1>Watch the map your agent is actually using.</h1>
+
+      <div className="livecount" aria-live="polite">
+        <span className="lc">
+          <b>{counts.repos}</b>
+          <i>{counts.repos === 1 ? 'repository' : 'repositories'}</i>
+        </span>
+        <span className="lc">
+          <b>{counts.files.toLocaleString()}</b>
+          <i>files mapped</i>
+        </span>
+        <span className="lc">
+          <b>{counts.watching}</b>
+          <i>{counts.watching === 1 ? 'person watching' : 'watching right now'}</i>
+        </span>
+        <span className="lc dot" title="These numbers come off the live subscription, not a build-time constant">
+          <em />live
+        </span>
+      </div>
 
       <p className="fn-lede">
         Every file is a block. It lights the moment your agent reads it, on every
