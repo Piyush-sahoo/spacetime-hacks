@@ -162,8 +162,7 @@ export default function Landing() {
 
       <p className="fn-cap">
         <span className="fn-k">A demonstration</span>
-        Real files from this repository, on a scripted walk. The live maps are in
-        the gallery; the form below makes one out of yours.
+        Real files from this repository, on a scripted walk. The live ones are below.
       </p>
 
       {/* ── the conversion action ─────────────────────────────────────────── */}
@@ -216,7 +215,7 @@ export default function Landing() {
       <PreviewMaps />
       <p className="fn-why">
         {range} Drawn out of the database as you look at them. Open one and you
-        are in the room, watching the same plate as everyone else in it.
+        are in that room.
       </p>
       <div className="actions">
         <button type="button" className="ctl" onClick={() => go(projectsLink())}>
@@ -232,10 +231,9 @@ export default function Landing() {
       <h2>Why a map, and not a summary</h2>
       <Cliff />
       <p className="fn-why">
-        A repo map that keeps only the top-K symbols arrives at two of the
-        forty-four guarding tests in{' '}
-        <a href={REPO} target="_blank" rel="noreferrer">our measurement</a> on a
-        400-symbol budget, and at none at all on 200.
+        Both rows are a repo map that keeps only the top-K symbols, against the
+        tests that guard the fix.{' '}
+        <a href={REPO} target="_blank" rel="noreferrer">The method</a>.
       </p>
 
       {/* ── 5 · the honesty ───────────────────────────────────────────────── */}

@@ -43,6 +43,49 @@ const DISTRICT_AT = 400
 const MIN_FILES = 20
 const MAX_FILES = 700
 
+/** How many repositories each `node_cov` row belongs to, counted once per feed. */
+function covCounts(cov) {
+  const out = new Map()
+  for (const c of cov.values()) {
+    const k = String(c.repoId ?? c.repo_id)
+    out.set(k, (out.get(k) || 0) + 1)
+  }
+  return out
+}
+
+/**
+ * WHICH REPOSITORIES GET DRAWN — one function, called in two places, because
+ * the socket has to pick before it can ask for the nodes and the component has
+ * to pick again to label them, and two copies of this rule would eventually
+ * disagree about which plate is which.
+ *
+ * A PREVIEW NOBODY HAS WALKED IS NOT A PREVIEW. The frame exists to show the
+ * thing the product does — blocks lighting as an agent reads them — so a
+ * repository with no coverage at all draws as a field of empty boxes and says
+ * the opposite. Explored repositories therefore come first, ahead of the wanted
+ * list; an unexplored one is drawn only when there are not three explored ones
+ * to draw, which is honest rather than empty.
+ */
+function choose(rows, counts) {
+  const fits = rows.filter((r) => r.slug && r.n >= MIN_FILES && r.n <= MAX_FILES)
+  const lit = (r) => (counts.get(r.id) || 0)
+  const out = []
+  const take = (r) => {
+    if (r && out.length < N && !out.some((o) => o.id === r.id)) out.push(r)
+  }
+  for (const want of WANTED) {
+    const hit = fits.find((r) => r.slug.toLowerCase() === want.toLowerCase())
+    if (hit && lit(hit) > 0) take(hit)
+  }
+  const rest = [...fits].sort((a, b) => (
+    ((lit(b) > 0) - (lit(a) > 0))
+    || (isGithubSlug(b.slug) - isGithubSlug(a.slug))
+    || (a.n - b.n)
+  ))
+  for (const r of rest) take(r)
+  return out.slice(0, N)
+}
+
 /**
  * One socket, opened late, for the repositories being previewed.
  *
@@ -56,6 +99,7 @@ function watchPreviews(onChange) {
   const nodes = new Map()
   const cov = new Map()
   let asked = false
+  let ready = false
   let raf = 0
   let live = null
 
@@ -82,42 +126,36 @@ function watchPreviews(onChange) {
     handle.onDelete?.((_c, row) => { store.delete(keyOf(row)); emit() })
   }
 
-  /** Which repositories to draw: the wanted ones first, then whatever fits. */
-  const pick = () => {
-    const rows = [...repos.values()]
-      .map((r) => ({ id: String(r.id), slug: String(r.slug || ''), n: Number(r.nodeCount ?? r.node_count ?? 0) }))
-      .filter((r) => r.slug && r.n >= MIN_FILES && r.n <= MAX_FILES)
-    const out = []
-    for (const want of WANTED) {
-      const hit = rows.find((r) => r.slug.toLowerCase() === want.toLowerCase())
-      if (hit) out.push(hit)
-    }
-    for (const r of rows.sort((a, b) => (isGithubSlug(b.slug) - isGithubSlug(a.slug)) || (a.n - b.n))) {
-      if (out.length >= N) break
-      if (!out.some((o) => o.id === r.id)) out.push(r)
-    }
-    return out.slice(0, N)
-  }
-
   /**
-   * Ask for the nodes, once, as soon as the repo rows can name three plates.
+   * Ask for the nodes, once, as soon as the roster can name three plates.
    *
-   * NOT on the repo subscription's `onApplied`. The row inserts and the applied
-   * callback do not have a guaranteed order, and when applied lands first the
-   * pick runs against an empty table, finds nothing to draw and never asks
-   * again — three dashed frames, no error, forever. Doing it in the coalescing
-   * frame means every insert delivered in that tick is already in hand.
+   * NOT straight off the subscription's `onApplied`. The row inserts and the
+   * applied callback do not have a guaranteed order, and when applied lands
+   * first the pick runs against an empty table, finds nothing to draw and never
+   * asks again — three dashed frames, no error, forever. `onApplied` therefore
+   * only raises `ready`; the pick itself happens in the coalescing frame, by
+   * which point every row delivered in that tick is already in hand.
+   *
+   * `ready` also has to mean COVERAGE has arrived, not just the repo list.
+   * `choose` sorts explored repositories to the front, and picking before the
+   * `node_cov` rows land would sort against an empty tape — the exact bug the
+   * ordering note above describes, one table over. Both are in one
+   * subscription, so one `onApplied` covers both.
    */
   const ask = () => {
-    if (asked || !live) return
-    const chosen = pick()
+    if (asked || !live || !ready) return
+    const rows = [...repos.values()].map((r) => ({
+      id: String(r.id),
+      slug: String(r.slug || ''),
+      n: Number(r.nodeCount ?? r.node_count ?? 0),
+    }))
+    const chosen = choose(rows, covCounts(cov))
     if (!chosen.length) return
     asked = true
-    const q = []
-    for (const c of chosen) {
-      q.push(`SELECT * FROM node WHERE repo_id = ${c.id}`)
-      q.push(`SELECT * FROM node_cov WHERE repo_id = ${c.id}`)
-    }
+    // Only the nodes. The coverage for every repository is already here — it is
+    // one row per file anybody has ever opened, across the whole database, and
+    // that is a smaller table than one mid-sized repo's file list.
+    const q = chosen.map((c) => `SELECT * FROM node WHERE repo_id = ${c.id}`)
     try {
       live.subscriptionBuilder().onApplied(emit).onError(emit).subscribe(q)
     } catch { /* the frames stay dashed, which is what they mean */ }
@@ -140,9 +178,11 @@ function watchPreviews(onChange) {
         bind(connection.db?.nodeCov || connection.db?.node_cov, cov, (r) => String(r.nodeId ?? r.node_id))
 
         connection.subscriptionBuilder()
-          .onApplied(() => emit())
-          .onError(() => emit())
-          .subscribe(['SELECT * FROM repo'])
+          .onApplied(() => { ready = true; emit() })
+          // A tape that never arrives must not leave three dashed frames
+          // forever: pick without it rather than not at all.
+          .onError(() => { ready = true; emit() })
+          .subscribe(['SELECT * FROM repo', 'SELECT * FROM node_cov'])
       })
       .onConnectError(() => emit())
       .build()
@@ -180,19 +220,13 @@ export default function PreviewMaps() {
 
   const cards = useMemo(() => {
     if (!feed) return []
-    const rows = [...feed.repos]
-      .map((r) => ({ id: String(r.id), slug: String(r.slug || ''), n: Number(r.nodeCount ?? r.node_count ?? 0), e: Number(r.edgeCount ?? r.edge_count ?? 0) }))
-      .filter((r) => r.slug && r.n >= MIN_FILES && r.n <= MAX_FILES)
-    const out = []
-    for (const want of WANTED) {
-      const hit = rows.find((r) => r.slug.toLowerCase() === want.toLowerCase())
-      if (hit) out.push(hit)
-    }
-    for (const r of rows.sort((a, b) => (isGithubSlug(b.slug) - isGithubSlug(a.slug)) || (a.n - b.n))) {
-      if (out.length >= N) break
-      if (!out.some((o) => o.id === r.id)) out.push(r)
-    }
-    return out.slice(0, N)
+    const rows = feed.repos.map((r) => ({
+      id: String(r.id),
+      slug: String(r.slug || ''),
+      n: Number(r.nodeCount ?? r.node_count ?? 0),
+      e: Number(r.edgeCount ?? r.edge_count ?? 0),
+    }))
+    return choose(rows, covCounts(feed.cov))
   }, [feed])
 
   return (
