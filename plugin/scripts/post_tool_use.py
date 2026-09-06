@@ -127,6 +127,23 @@ def main() -> int:
         log("extract failed: %s" % exc)
         return 0
 
+    # A shell command that WROTE is reported as an edit, not as Bash.
+    #
+    # Orange on the map means the agent changed this file. An agent that edits
+    # with `sed -i` or a heredoc rather than the Edit tool was having every one
+    # of those reported as plain Bash — indistinguishable from `cat`, so a real
+    # change read as a glance and the file never went orange. The command text
+    # is the only evidence available, and it is enough for the forms that
+    # actually turn up. Anything unrecognised stays a read.
+    if tool_name == "Bash":
+        try:
+            command = tool_input.get("command") if isinstance(tool_input, dict) else tool_input
+            if map_room.bash_wrote(command):
+                tool_name = "Edit"
+                log("bash wrote -> reporting as Edit")
+        except Exception:
+            pass
+
     log("paths=%r" % (paths,))
     if not paths:
         return 0

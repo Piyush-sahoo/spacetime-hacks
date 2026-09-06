@@ -598,6 +598,35 @@ def _looks_like_file(value: str) -> bool:
     return "." in base and base.rsplit(".", 1)[-1].isalnum()
 
 
+# A shell command that WRITES rather than reads. Orange on the map means the
+# agent changed a file, and an agent that edits with `sed -i` or a heredoc
+# instead of the Edit tool was reporting those as plain Bash — indistinguishable
+# from `cat`, so a real edit read as a glance. These are the forms that actually
+# turn up in agent transcripts; anything not matched stays a read, because
+# calling a read an edit is the worse error of the two.
+_WRITEISH = re.compile(
+    r"(?:^|[|&;]\s*)(?:sed\s+-[a-z]*i|tee|dd\b|truncate|install\b)"     # in-place editors
+    r"|>>?\s*(?![&\d])"                                                    # redirect into a file
+    r"|<<-?\s*['\"]?[A-Za-z_]"                                            # heredoc
+    r"|(?:^|[|&;]\s*)(?:mv|cp|touch|ln)\s",                                # file creation / moves
+    re.IGNORECASE,
+)
+
+
+def bash_wrote(command: str) -> bool:
+    """Did this shell command change a file, as best we can tell from its text?
+
+    Deliberately conservative. `git diff > /dev/null` and `echo x >&2` are not
+    edits, and neither is anything we do not recognise.
+    """
+    c = str(command or "")
+    if not c or len(c) > 4096:
+        return False
+    # A redirect to a device or a discard is not a file edit.
+    stripped = re.sub(r">>?\s*/dev/\w+", " ", c)
+    return bool(_WRITEISH.search(stripped))
+
+
 def extract_paths(tool_name: str, tool_input, tool_response=None, cwd: str | None = None) -> list:
     """Pull concrete file paths out of a tool's input (and, for search tools,
     out of its response, since that is where the matched files live)."""
