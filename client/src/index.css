@@ -408,6 +408,59 @@ pre {
 #body .q p.para.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
 #body .q p.para:hover { background: var(--face); }
 
+/* ── THE ASK ───────────────────────────────────────────────────────────────
+   An instrument's field, not a chat box. Solid ink edge, no radius, no soft
+   focus ring: the only thing that changes on focus is that the field takes the
+   hover face, which is the same move every other pressable surface here makes.
+   Selectors carry `#body` because `#body p` is ID-specific and would otherwise
+   win over the margins below. */
+.ask { border: 1.5px solid var(--ink); padding: 9px 10px; margin: 14px 0 0; }
+.ask .askrow { display: flex; gap: 8px; align-items: stretch; }
+.ask .askrow button.ctl { flex: 0 0 auto; }
+
+input.askin {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  padding: 5px 8px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input.askin::placeholder { color: var(--ink-2); opacity: 1; }
+input.askin:focus { outline: none; background: var(--face); }
+input.askin:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+#body p.askhint {
+  margin: 7px 0 0;
+  max-width: none;
+  font-size: 9.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* WHAT WAS ASKED. A person wrote this, so it is set in full ink against a rule
+   — distinct from the file's own sentence and from the agent's finding, which
+   both stay small and grey. */
+#body p.qask {
+  margin: 5px 0 0;
+  max-width: none;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  border-left: 1.5px solid var(--ink);
+  padding-left: 8px;
+  overflow-wrap: anywhere;
+}
+
 /* THE LIVE TAPE — the liveness proof. One row per tool call, newest first. */
 .feed { list-style: none; margin: 0; padding: 0; }
 .feed li {
@@ -486,6 +539,11 @@ pre {
   #body { overflow-y: visible; }
   #index { order: 3; border-right: none; border-top: 1.5px solid var(--ink); overflow-y: visible; }
   #hint { display: none; }
+  /* At 390px the field takes the row and SEND drops under it, rather than the
+     two of them sharing 330px and neither being usable. */
+  .ask .askrow { flex-wrap: wrap; }
+  .ask .askrow input.askin { flex: 1 1 100%; font-size: 16px; padding: 7px 8px; }
+  .ask .askrow button.ctl { padding: 7px 12px; }
 }
 
 /* Scrollbars stay out of the drawing. */
@@ -578,4 +636,21 @@ pre {
   margin-left: auto; flex: 0 0 auto;
   font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ── the top strip on a phone ──────────────────────────────────────────────
+   A repo stat holding `perfect7613/matriblood-q · this run` is wider than a
+   390px screen on its own, so EXPLORED and AGENTS sat off the right edge and
+   had to be scrolled to — on the one surface whose whole job is to be read at
+   a glance. The slug gets a share of the width and an ellipsis, and the run
+   qualifier drops: `?session=` is in the URL and the ASKED tab knows, so it is
+   the least valuable thing competing for those pixels. */
+@media (max-width: 900px) {
+  #stats > .stat:first-child { max-width: 44vw; min-width: 0; }
+  #stats > .stat:first-child .v {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #stats > .stat:first-child .v .dim { display: none; }
+  #stats > .stat { padding-left: 10px; padding-right: 10px; }
+  .stat .v { font-size: 13.5px; }
 }
