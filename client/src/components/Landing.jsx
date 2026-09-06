@@ -9,7 +9,10 @@ import PreviewMaps from './PreviewMaps.jsx'
 
 /** Roughly how long indexing takes, whatever the repo size. Used only to
  *  animate an honest bar — the answer, not the clock, is what ends it. */
-const EXPECTED_MS = 3400
+/** The GitHub tree call. Flat in repo size — one request. */
+const TREE_MS = 3400
+/** Reading every file afterwards. Scales with the repo; the module caps at 150s. */
+const READ_MS = 60000
 
 /** Where the method behind the one measured number on this page is written down. */
 const REPO = 'https://github.com/Piyush-sahoo/spacetime-hacks'
@@ -19,6 +22,7 @@ export default function Landing() {
   const [text, setText] = useState('')
   const [phase, setPhase] = useState('idle') // idle | working | done | failed
   const [progress, setProgress] = useState(0)
+  const [stage, setStage] = useState('tree')
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
@@ -80,13 +84,25 @@ export default function Landing() {
     const already = known.get(parsed.slug.toLowerCase())
     setPhase('working'); setError(null); setResult(null); setProgress(0)
 
-    // The bar walks to 92% over the expected duration and then waits. It never
-    // reaches 100% on a timer — only a real answer finishes it.
+    // TWO PHASES, BECAUSE THERE ARE TWO.
+    //
+    // The tree arrives in about three seconds; then the database reads every
+    // file to count what is in it and write what it does, and that takes as
+    // long as the repository is big. A single bar calibrated to the first
+    // phase hit 92% and then sat there for two minutes looking hung.
+    //
+    // So the bar walks fast to the tree mark, then slowly across the reading,
+    // and the line underneath says which one is happening. It never reaches
+    // 100% on a timer — only a real answer finishes it.
     const started = Date.now()
     const tick = () => {
-      const pct = Math.min(92, Math.round((Date.now() - started) / EXPECTED_MS * 92))
+      const ms = Date.now() - started
+      const pct = ms < TREE_MS
+        ? Math.round((ms / TREE_MS) * 26)
+        : Math.min(94, 26 + Math.round(((ms - TREE_MS) / READ_MS) * 68))
       setProgress(pct)
-      if (pct < 92) timers.current.push(setTimeout(tick, 120))
+      setStage(ms < TREE_MS ? 'tree' : 'read')
+      if (pct < 94) timers.current.push(setTimeout(tick, 200))
     }
     tick()
 
@@ -185,7 +201,8 @@ export default function Landing() {
       </form>
 
       <p className="fn-why" style={{ marginTop: 8 }}>
-        Public repositories, about three and a half seconds whatever the size.
+        Public repositories. The map itself lands in about three seconds; reading
+        every file to describe it takes a little longer.
         Nothing is cloned and no token is sent.
       </p>
 
@@ -195,7 +212,9 @@ export default function Landing() {
             <i style={{ width: `${progress}%` }} />
           </div>
           <p className="fn-why" style={{ margin: 0 }}>
-            Fetching the tree from GitHub and building the graph.
+            {stage === 'tree'
+              ? 'Fetching the tree from GitHub and building the graph.'
+              : 'Reading each file — counting what is in it, and writing what it does.'}
           </p>
         </>
       )}
