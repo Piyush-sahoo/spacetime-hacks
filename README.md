@@ -7,6 +7,10 @@ never looked, tap it, and the agent goes and looks.**
 
 Built at Midnight Moonshot, the SpacetimeDB World Tour hackathon in Bengaluru.
 
+**Judging this?** Start at **[NOTES-FOR-JUDGES.md](NOTES-FOR-JUDGES.md)** — what to
+click, exactly where SpacetimeDB carries the architecture, how to verify the build
+provenance, and what we are *not* claiming.
+
 ---
 
 ## Try it in three steps
