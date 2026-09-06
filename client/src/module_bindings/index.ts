@@ -48,6 +48,7 @@ import ReportTouchTimedReducer from "./report_touch_timed_reducer";
 import RequestExplorationReducer from "./request_exploration_reducer";
 import ResetCoverageReducer from "./reset_coverage_reducer";
 import SetFocusReducer from "./set_focus_reducer";
+import SetSecretReducer from "./set_secret_reducer";
 import StartWalkReducer from "./start_walk_reducer";
 import StepWalkReducer from "./step_walk_reducer";
 
@@ -345,6 +346,7 @@ const reducersSchema = __reducers(
   __reducerSchema("request_exploration", RequestExplorationReducer),
   __reducerSchema("reset_coverage", ResetCoverageReducer),
   __reducerSchema("set_focus", SetFocusReducer),
+  __reducerSchema("set_secret", SetSecretReducer),
   __reducerSchema("start_walk", StartWalkReducer),
   __reducerSchema("step_walk", StepWalkReducer),
 );

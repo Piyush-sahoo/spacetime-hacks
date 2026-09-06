@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeReadFile": [{ "command": "./.cursor/hooks/map-room.sh", "timeout": 5 }],
+    "afterFileEdit": [{ "command": "./.cursor/hooks/map-room.sh", "timeout": 5 }],
+    "afterShellExecution": [{ "command": "./.cursor/hooks/map-room.sh", "timeout": 5 }]
+  }
+}

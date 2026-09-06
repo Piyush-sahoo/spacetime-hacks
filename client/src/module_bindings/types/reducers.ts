@@ -20,6 +20,7 @@ import ReportTouchTimedReducer from "../report_touch_timed_reducer";
 import RequestExplorationReducer from "../request_exploration_reducer";
 import ResetCoverageReducer from "../reset_coverage_reducer";
 import SetFocusReducer from "../set_focus_reducer";
+import SetSecretReducer from "../set_secret_reducer";
 import StartWalkReducer from "../start_walk_reducer";
 import StepWalkReducer from "../step_walk_reducer";
 
@@ -37,6 +38,7 @@ export type ReportTouchTimedParams = __Infer<typeof ReportTouchTimedReducer>;
 export type RequestExplorationParams = __Infer<typeof RequestExplorationReducer>;
 export type ResetCoverageParams = __Infer<typeof ResetCoverageReducer>;
 export type SetFocusParams = __Infer<typeof SetFocusReducer>;
+export type SetSecretParams = __Infer<typeof SetSecretReducer>;
 export type StartWalkParams = __Infer<typeof StartWalkReducer>;
 export type StepWalkParams = __Infer<typeof StepWalkReducer>;
 

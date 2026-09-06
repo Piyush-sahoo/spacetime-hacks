@@ -1,0 +1,17 @@
+{
+  "description": "The Map Room — report every file this agent touches.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MAP_ROOM_AGENT=codex python3 \"$HOME/.map-room/agent_hook.py\"",
+            "timeout": 5,
+            "statusMessage": "Reporting to The Map Room"
+          }
+        ]
+      }
+    ]
+  }
+}

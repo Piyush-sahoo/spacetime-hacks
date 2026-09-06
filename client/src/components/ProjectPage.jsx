@@ -130,13 +130,16 @@ export default function ProjectPage({ slug }) {
 
       <Deepen repo={repo} />
 
+      {/* ── one paste, any agent ───────────────────────────────────────── */}
+      <SetupPrompt slug={slug} base={base} />
+
       {/* ── the walkthrough ────────────────────────────────────────────── */}
-      <h2>Put your own agent on it — six steps</h2>
+      <h2>Or do it yourself — six steps</h2>
       <p>
-        You need Python 3 (standard library only, nothing to pip install) and
-        Claude Code. Steps 1 to 4 are run <strong>once, ever</strong>, from a
-        checkout of The Map Room. Step 6 is run inside the repository you actually
-        want to watch.
+        The manual path, for Claude Code, if you would rather run the commands
+        than hand them to an agent. You need Python 3 (standard library only,
+        nothing to pip install). Steps 1 to 4 are run <strong>once, ever</strong>.
+        Step 6 is run inside the repository you actually want to watch.
       </p>
 
       <ol className="fn-steps">
@@ -523,4 +526,151 @@ function ago(ms) {
   if (s < 3600) return `${Math.round(s / 60)}m ago`
   if (s < 86400) return `${Math.round(s / 3600)}h ago`
   return `${Math.round(s / 86400)}d ago`
+}
+
+/* ── one paste, any agent ─────────────────────────────────────────────────── */
+
+const INSTALL_SH =
+  'https://raw.githubusercontent.com/Piyush-sahoo/spacetime-hacks/main/plugin/agents/install.sh'
+
+/**
+ * The whole six-step walkthrough, addressed to an agent instead of a person.
+ *
+ * Every fact in it that could be wrong — the repository, the link — is
+ * interpolated from this page rather than typed, so a prompt copied from
+ * pallets/flask can never quietly install against somebody else's map. The
+ * per-agent detail deliberately lives in `install.sh`, not in here: a prompt
+ * that has to be re-copied every time a tool ships a new hook API is a prompt
+ * that goes stale on somebody's screen.
+ */
+function setupPrompt(slug, base) {
+  return `Set up "The Map Room" in this repository. Do it yourself, do not ask me questions.
+
+The Map Room is a live map of a codebase: every file an agent reads, edits or searches lights up in a browser for a human to watch. That human can click a region nobody has looked at and ask the agent to go explore it.
+
+Repository: ${slug}
+Live map:   ${base}
+
+1. Whichever agent you are, first: spacetime login
+   No spacetime command? curl -sSf https://install.spacetimedb.com | sh
+
+2. Work out which agent you are and run exactly ONE of these.
+
+   Claude Code — installs a PostToolUse hook:
+     claude plugin marketplace add Piyush-sahoo/spacetime-hacks
+     claude plugin install map-room@map-room
+     then tell me to restart Claude Code, because hooks load at session start.
+
+   Codex — writes .codex/hooks.json (PostToolUse):
+     curl -fsSL ${INSTALL_SH} | sh -s -- codex
+     then tell me to run /hooks inside Codex and trust it. Codex will not run a
+     hook it has not been told to trust.
+
+   Cursor — writes .cursor/hooks.json (beforeReadFile, afterFileEdit, afterShellExecution):
+     curl -fsSL ${INSTALL_SH} | sh -s -- cursor
+     then tell me to reload the Cursor window.
+
+   opencode — writes .opencode/plugins/map-room.js (tool.execute.after):
+     curl -fsSL ${INSTALL_SH} | sh -s -- opencode
+     then tell me to restart opencode.
+
+   Anything else:
+     curl -fsSL ${INSTALL_SH} | sh
+     then read ~/.map-room/MAP-ROOM.md and wire it into whatever hook, rule or
+     instruction file your tool has. If it has none, follow that file and call
+     the report command yourself after you read files.
+
+3. Verify. From the root of this repository:
+     python3 ~/.map-room/map_room_cli.py doctor
+   On Claude Code the plugin brings its own copy, so run instead:
+     python3 "$(ls -d ~/.claude/plugins/cache/map-room/map-room/*/scripts/map_room_cli.py | tail -1)" doctor
+
+   Good: repo_id has a number, repo_slug is ${slug}, token says found.
+
+   repo_id : UNBOUND is not a bug. A repository nobody has indexed reports
+   NOTHING, deliberately — there is no default map to fall back to. Fix it by
+   running that same script with "index" instead of "doctor", then "rebind".
+
+4. Prove it. Read one real file in this repository, then:
+     python3 ~/.map-room/map_room_cli.py report <that file>
+
+5. From then on, when the human clicks a region on the map, answer it:
+     python3 ~/.map-room/map_room_cli.py pending
+     python3 ~/.map-room/map_room_cli.py claim <id>
+     python3 ~/.map-room/map_room_cli.py complete <id> "two or three plain lines"
+   Never report a file you did not actually open.
+
+6. Report back in four lines: which agent you are; ENFORCED (your tool runs the
+   hook, you cannot forget) or COOPERATIVE (you call report yourself); what
+   doctor printed for repo_id and token; and the session link step 4 gave you.`
+}
+
+/**
+ * Enforced or cooperative, stated on the page as plainly as it would be said
+ * out loud. All four turned out to have a real per-tool-call hook, so all four
+ * are enforced — but the distinction still has to be on the page, because the
+ * fallback for a fifth agent is cooperative and the number on the map means
+ * something different when it is.
+ */
+const AGENT_MODES = [
+  ['Claude Code', true, 'PostToolUse hook, from the installed plugin.',
+    'https://docs.claude.com/en/docs/claude-code/hooks'],
+  ['Codex', true, 'PostToolUse hook in .codex/hooks.json. Trust it once via /hooks.',
+    'https://developers.openai.com/codex/hooks'],
+  ['Cursor', true, 'beforeReadFile, afterFileEdit and afterShellExecution in .cursor/hooks.json.',
+    'https://cursor.com/docs/hooks'],
+  ['opencode', true, 'A plugin whose tool.execute.after runs on every tool call.',
+    'https://opencode.ai/docs/plugins/'],
+  ['Anything else', false, 'No hook to install: the agent is asked to call report itself.', null],
+]
+
+function SetupPrompt({ slug, base }) {
+  const text = useMemo(() => setupPrompt(slug, base), [slug, base])
+
+  return (
+    <>
+      <h2>One paste, any agent</h2>
+      <div className="fn-paste">
+        <span className="fn-k">Copy setup instruction</span>
+        <p className="fn-what">
+          Copy this, paste it into your coding agent, and it installs itself.
+          It already names <strong>{slug}</strong> and this map's link, so there
+          is nothing to fill in and nothing to decide. Works from Claude Code,
+          Codex, Cursor and opencode.
+        </p>
+        <Copy text={text} title="the setup instruction" />
+      </div>
+
+      <table className="fn-matrix fn-scroll">
+        <thead>
+          <tr><th>Agent</th><th>How it reports</th><th>What actually fires</th></tr>
+        </thead>
+        <tbody>
+          {AGENT_MODES.map(([name, enforced, how, doc]) => (
+            <tr key={name}>
+              <td>{name}</td>
+              <td className="fn-mode">
+                <span className={enforced ? 'fn-tag on' : 'fn-tag'}>
+                  {enforced ? 'Enforced' : 'Cooperative'}
+                </span>
+              </td>
+              <td>
+                {how}
+                {doc && <> <a href={doc} target="_blank" rel="noreferrer">docs</a></>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="fn-why" style={{ marginTop: 0 }}>
+        <strong>Enforced</strong> means the tool itself runs the reporting
+        command on every matching tool call — the model is not asked and cannot
+        opt out, which is what makes a dark region mean “nobody read this”.{' '}
+        <strong>Cooperative</strong> means the agent has been asked to report
+        and can forget. Both write the same rows; only one of them is a
+        guarantee. Answering the human's clicks is cooperative everywhere: no
+        hook can read a file for you.
+      </p>
+    </>
+  )
 }

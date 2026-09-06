@@ -5,7 +5,7 @@
  * Client + seeder build against exactly these.
  */
 import { schema, table, t } from 'spacetimedb/server';
-import type { ReducerCtx } from 'spacetimedb/server';
+import type { ProcedureCtx, ReducerCtx } from 'spacetimedb/server';
 import { TimeDuration } from 'spacetimedb';
 
 // ---------------------------------------------------------------- constants
@@ -301,6 +301,25 @@ const new_land_seq = table(
 );
 
 /**
+ * Server-side credentials. PRIVATE -- `public: false`, exactly like
+ * `path_cache` and `new_land_seq`, so no client subscription can ever read a
+ * row out of here. Only module code running on the server sees it.
+ *
+ * This exists so that indexing a repo enriches it WITHOUT the person pasting
+ * the URL having to own an API key. `enrich_repo` and `summarize_dirs` still
+ * take a key as an argument and still never store it; this is the fallback
+ * `index_repo` reads when nobody supplied one.
+ */
+const secrets = table(
+  { name: 'secrets', public: false },
+  {
+    name: t.string().primaryKey(),
+    value: t.string(),
+    at: t.timestamp(),
+  }
+);
+
+/**
  * What is actually INSIDE the file behind a node. Written by `enrich_repo`.
  *
  * A SIDE TABLE, not columns on `node`, for the same reason `touch_meta` and
@@ -378,6 +397,7 @@ const spacetimedb = schema({
   node_summary,
   new_land,
   new_land_seq,
+  secrets,
   file_meta,
   dir_meta,
 });
@@ -392,6 +412,15 @@ type Ctx = ReducerCtx<typeof spacetimedb.schemaType>;
  * `index_repo` reuse the exact same row-writing code the seeder reducers use.
  */
 type Db = Ctx['db'];
+
+/** A procedure's context: same tables, plus `http` and explicit `withTx`. */
+type PCtx = ProcedureCtx<typeof spacetimedb.schemaType>;
+
+/**
+ * What one batch of enrichment did. `text` is the line the public procedure
+ * hands back verbatim; the numbers are what a caller chaining batches needs.
+ */
+type BatchResult = { text: string; done: number; total: number; next: number };
 
 /** JSON numbers -> bigint, tolerating strings from the seeder. */
 function toBig(v: unknown): bigint {
@@ -523,6 +552,28 @@ export const finish_repo = spacetimedb.reducer(
   { repo_id: t.u64(), reachability: t.f32() },
   (ctx, { repo_id, reachability }) => {
     finishRepoRow(ctx.db, repo_id, reachability);
+  }
+);
+
+/**
+ * Put a credential in the private `secrets` table. Trivial on purpose.
+ *
+ * NO AUTH. Nothing in this module has any: any caller can already invoke
+ * `reset_coverage` and wipe a repo's coverage feed. Bolting an auth scheme onto
+ * one reducer would be a padlock on one door of a house with no walls, and is
+ * out of scope. What IS enforced is the one thing that matters here: `secrets`
+ * is `public: false`, so a written key can never be read back by a client, and
+ * this reducer's name is not surfaced anywhere in the UI.
+ */
+export const set_secret = spacetimedb.reducer(
+  { name: 'set_secret' },
+  { name: t.string(), value: t.string() },
+  (ctx, { name, value }) => {
+    const k = name.trim();
+    if (k.length === 0) return;
+    const row = { name: k, value, at: ctx.timestamp };
+    if (ctx.db.secrets.name.find(k)) ctx.db.secrets.name.update(row);
+    else ctx.db.secrets.insert(row);
   }
 );
 
@@ -1458,6 +1509,37 @@ type TreeEntry = { path: string; type: string };
  * hour, which is plenty. A PAT raises the ceiling and reaches private repos.
  * It is an argument, never a constant: no credential is ever compiled in.
  */
+/** The row in the private `secrets` table that holds the OpenAI key. */
+const OPENAI_SECRET = 'openai';
+/**
+ * How many files `index_repo` will enrich INLINE before handing the map back.
+ *
+ * The ceiling is the clock, not the money. `ctx.http.fetch` tops out at 180s
+ * and the procedure has its own budget on top; a 20-file batch costs roughly
+ * four seconds, so 200 files is about ten batches and lands comfortably inside
+ * it. django/django's 2,975 files would not, which is why the pass stops here
+ * and says so -- `enrich_repo` and the "deepen this map" control pick up
+ * exactly where it left off.
+ */
+const AUTO_ENRICH_FILES = 200;
+/** Files per model call in the inline pass. */
+const AUTO_ENRICH_BATCH = 20;
+/** Directory batches in the inline pass, `MAX_DIR_LIMIT` directories each. */
+const AUTO_DIR_BATCHES = 4;
+/**
+ * Wall-clock stop for the inline pass. The file cap alone is not enough: a
+ * measured `gpt-5-nano` batch costs ~35s, not the ~4s a non-reasoning tier did,
+ * so 200 files is ten batches and the clock runs out long before the cap does.
+ * Whichever limit is hit first wins, and the pass stops CLEANLY -- everything
+ * already written stays written and the return line says `auto=budget`.
+ *
+ * If the host freezes `Date.now()` for determinism the difference is always 0
+ * and this guard simply never fires, leaving the file cap in charge. That is
+ * the safe direction to be wrong in: the map is committed before any of this
+ * runs, so an overrun costs the return string and nothing else.
+ */
+const AUTO_BUDGET_MS = 150_000;
+
 export const indexRepo = spacetimedb.procedure(
   { name: 'index_repo' },
   { owner: t.string(), repo: t.string(), github_token: t.string() },
@@ -1661,10 +1743,71 @@ export const indexRepo = spacetimedb.procedure(
       finishRepoRow(tx.db, repo_id, 0.0);
     });
 
+    // ---- 7. enrich inline, if the server holds a key ------------------------
+    //
+    // The whole point of `secrets`: somebody pastes a URL from a browser that
+    // has never held an API key, and still gets a map with sentences on it.
+    //
+    // Everything below is BEST EFFORT. The nodes, edges, provenance and `repo`
+    // row above are already committed -- each `ctx.withTx` is its own
+    // transaction -- so nothing here can lose the map, whatever it throws and
+    // however long it takes. No key is not a failure: a map without sentences
+    // is the correct answer when nobody configured one.
+    let autoFiles = 0;
+    let autoDirs = 0;
+    let autoCapped = false;
+    let autoNote = '';
+    try {
+      let serverKey = '';
+      ctx.withTx(tx => {
+        const row = tx.db.secrets.name.find(OPENAI_SECRET);
+        if (row) serverKey = row.value.trim();
+      });
+
+      if (serverKey.length === 0) {
+        autoNote = ' auto=no-key';
+      } else {
+        const startedAt = Date.now();
+        const spent = (): number => Date.now() - startedAt;
+        const budget = Math.min(nFiles, AUTO_ENRICH_FILES);
+        autoCapped = nFiles > AUTO_ENRICH_FILES;
+
+        let at = 0;
+        while (at < budget) {
+          const r = enrichBatch(ctx, repo_id, at, AUTO_ENRICH_BATCH, serverKey);
+          autoFiles += r.done;
+          if (r.next <= at) break; // no progress: stop rather than spin
+          at = r.next;
+          if (at >= r.total) break;
+          if (spent() > AUTO_BUDGET_MS) { autoCapped = true; autoNote = ' auto=budget'; break; }
+        }
+
+        // Directories read only what the pass above just wrote, so they cost no
+        // GitHub traffic and one model call per 24 of them. They get their own
+        // slice of the clock: a map with file sentences and no directory
+        // sentences is the half nobody sees first.
+        let dirAt = 0;
+        for (let i = 0; i < AUTO_DIR_BATCHES; i++) {
+          const d = summarizeDirBatch(ctx, repo_id, dirAt, MAX_DIR_LIMIT, serverKey);
+          autoDirs += d.done;
+          if (d.next <= dirAt) break;
+          dirAt = d.next;
+          if (dirAt >= d.total) break;
+          if (spent() > AUTO_BUDGET_MS + 60_000) break;
+        }
+      }
+    } catch (e) {
+      // A failed enrichment must never cost the map. Report it and leave
+      // `enrich_repo` / "deepen this map" to finish the job.
+      autoNote = ` auto_error=${String(e).slice(0, 120).replace(/\s+/g, '-')}`;
+    }
+
     return (
       `ok repo_id=${repo_id} slug=${slug} blobs=${blobs} nodes=${nFiles} ` +
       `edges=${nEdges} truncated=${truncated} capped=${capped} ` +
-      `id_band=[${base + 1n}..${base + BigInt(nFiles)}]`
+      `id_band=[${base + 1n}..${base + BigInt(nFiles)}] ` +
+      `auto_enriched=${autoFiles} auto_dirs=${autoDirs} auto_capped=${autoCapped}` +
+      autoNote
     );
   }
 );
@@ -2240,11 +2383,13 @@ function clampSummary(s: string): string {
  * counters, because "how many imports did you throw away" is a question this
  * has to be able to answer out loud.
  */
-export const enrichRepo = spacetimedb.procedure(
-  { name: 'enrich_repo' },
-  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
-  t.string(),
-  (ctx, { repo_id, offset, limit, api_key }) => {
+function enrichBatch(
+  ctx: PCtx,
+  repo_id: bigint,
+  offset: number,
+  limit: number,
+  api_key: string
+): BatchResult {
     const key = api_key.trim();
     const want = Math.max(1, Math.min(MAX_ENRICH_LIMIT, Number(limit) || 0));
     const from = Math.max(0, Number(offset) || 0);
@@ -2301,9 +2446,12 @@ export const enrichRepo = spacetimedb.procedure(
       total = filesInRepo.length;
       batch = filesInRepo.slice(from, from + want);
     });
-    if (bad.length > 0) return bad;
+    if (bad.length > 0) return { text: bad, done: 0, total, next: from };
     if (batch.length === 0) {
-      return `ok offset=${from} done=0 total=${total} skipped=0 imports=0 note=past-the-end`;
+      return {
+        text: `ok offset=${from} done=0 total=${total} skipped=0 imports=0 note=past-the-end`,
+        done: 0, total, next: from,
+      };
     }
 
     // ---- 2. fetch each file (no transaction is open) -----------------------
@@ -2522,15 +2670,27 @@ export const enrichRepo = spacetimedb.procedure(
     });
 
     const rate = seen > 0 ? Math.round((resolved / seen) * 100) : 0;
-    return (
-      `ok offset=${from} done=${got.length} total=${total} skipped=${skipped} ` +
-      `imports=${edgesWritten} seen=${seen} resolved=${resolved} rate=${rate}% ` +
-      `unresolved=${unresolved} ambiguous=${ambiguous} replaced=${edgesDropped} ` +
-      `sym_regex=${got.reduce((a, f) => a + f.symbols, 0)} sym_model=${modelSymbols} ` +
-      `llm=${llm} next=${from + batch.length}` +
-      (misses.length > 0 ? ` misses=${misses.join(',')}` : '')
-    );
-  }
+    return {
+      text:
+        `ok offset=${from} done=${got.length} total=${total} skipped=${skipped} ` +
+        `imports=${edgesWritten} seen=${seen} resolved=${resolved} rate=${rate}% ` +
+        `unresolved=${unresolved} ambiguous=${ambiguous} replaced=${edgesDropped} ` +
+        `sym_regex=${got.reduce((a, f) => a + f.symbols, 0)} sym_model=${modelSymbols} ` +
+        `llm=${llm} next=${from + batch.length}` +
+        (misses.length > 0 ? ` misses=${misses.join(',')}` : ''),
+      done: got.length,
+      total,
+      next: from + batch.length,
+    };
+}
+
+/** The public entry point. All the work lives in `enrichBatch`, which `index_repo` also calls. */
+export const enrichRepo = spacetimedb.procedure(
+  { name: 'enrich_repo' },
+  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
+  t.string(),
+  (ctx, { repo_id, offset, limit, api_key }) =>
+    enrichBatch(ctx, repo_id, Number(offset), Number(limit), api_key).text
 );
 
 // ---------------------------------------------------------------- directories
@@ -2634,11 +2794,13 @@ function dirFactsSchema(): unknown {
  * is no regex half here, because a directory's purpose is prose all the way
  * down.
  */
-export const summarizeDirs = spacetimedb.procedure(
-  { name: 'summarize_dirs' },
-  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
-  t.string(),
-  (ctx, { repo_id, offset, limit, api_key }) => {
+function summarizeDirBatch(
+  ctx: PCtx,
+  repo_id: bigint,
+  offset: number,
+  limit: number,
+  api_key: string
+): BatchResult {
     const key = api_key.trim();
     const want = Math.max(1, Math.min(MAX_DIR_LIMIT, Number(limit) || 0));
     const from = Math.max(0, Number(offset) || 0);
@@ -2739,15 +2901,20 @@ export const summarizeDirs = spacetimedb.procedure(
       total = dirs.length;
       batch = dirs.slice(from, from + want);
     });
-    if (bad.length > 0) return bad;
+    if (bad.length > 0) return { text: bad, done: 0, total, next: from };
     if (batch.length === 0) {
-      return `ok offset=${from} done=0 total=${total} skipped=0 barren=${barren} note=past-the-end`;
+      return {
+        text: `ok offset=${from} done=0 total=${total} skipped=0 barren=${barren} note=past-the-end`,
+        done: 0, total, next: from,
+      };
     }
     if (key.length === 0) {
-      return (
-        `ok offset=${from} done=0 total=${total} skipped=${batch.length} barren=${barren} ` +
-        `llm=no-key next=${from + batch.length}`
-      );
+      return {
+        text:
+          `ok offset=${from} done=0 total=${total} skipped=${batch.length} barren=${barren} ` +
+          `llm=no-key next=${from + batch.length}`,
+        done: 0, total, next: from + batch.length,
+      };
     }
 
     // ---- 2. one model call, over text the database already holds -----------
@@ -2854,10 +3021,22 @@ export const summarizeDirs = spacetimedb.procedure(
     });
 
     const missed = batch.filter(d => !said.has(d.dir)).map(d => d.dir);
-    return (
-      `ok offset=${from} done=${written} total=${total} skipped=${batch.length - written} ` +
-      `barren=${barren} llm=${llm} next=${from + batch.length}` +
-      (missed.length > 0 ? ` missed=${missed.slice(0, 4).join(',')}` : '')
-    );
-  }
+    return {
+      text:
+        `ok offset=${from} done=${written} total=${total} skipped=${batch.length - written} ` +
+        `barren=${barren} llm=${llm} next=${from + batch.length}` +
+        (missed.length > 0 ? ` missed=${missed.slice(0, 4).join(',')}` : ''),
+      done: written,
+      total,
+      next: from + batch.length,
+    };
+}
+
+/** The public entry point. The work lives in `summarizeDirBatch`, which `index_repo` also calls. */
+export const summarizeDirs = spacetimedb.procedure(
+  { name: 'summarize_dirs' },
+  { repo_id: t.u64(), offset: t.u32(), limit: t.u32(), api_key: t.string() },
+  t.string(),
+  (ctx, { repo_id, offset, limit, api_key }) =>
+    summarizeDirBatch(ctx, repo_id, Number(offset), Number(limit), api_key).text
 );

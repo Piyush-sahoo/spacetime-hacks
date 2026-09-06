@@ -160,6 +160,13 @@ export const RepoIndex = __t.object("RepoIndex", {
 });
 export type RepoIndex = __Infer<typeof RepoIndex>;
 
+export const Secrets = __t.object("Secrets", {
+  name: __t.string(),
+  value: __t.string(),
+  at: __t.timestamp(),
+});
+export type Secrets = __Infer<typeof Secrets>;
+
 export const Touch = __t.object("Touch", {
   id: __t.u64(),
   repoId: __t.u64(),

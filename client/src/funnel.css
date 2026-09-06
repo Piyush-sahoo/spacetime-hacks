@@ -201,6 +201,34 @@
   display: inline-block; margin-bottom: 6px;
 }
 
+/* ── the one-paste setup ─────────────────────────────────────────────────── */
+/* The pasted prompt is ~50 lines. Rendered in full it would push the rest of
+   the page below the fold, so this one `pre` scrolls inside itself. Every other
+   copy block on the page still shows all of its text, because those are
+   commands a person is expected to READ before running. This one is addressed
+   to an agent, not to a human, and the button is the whole interaction. */
+.fn-paste { border: 1.5px solid var(--ink); padding: 12px 14px; margin: 12px 0 16px; }
+.fn-paste .fn-k {
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  background: var(--hi-bg); color: var(--hi-fg); padding: 1px 6px;
+  display: inline-block; margin-bottom: 6px;
+}
+.fn-paste .fn-what { font-size: 12px; margin: 0 0 10px; max-width: 68ch; }
+.fn-paste .fn-copy pre { max-height: 260px; overflow-y: auto; font-size: 10.5px; line-height: 1.5; }
+
+/* Which agent gets an enforced hook and which one has to be asked nicely. */
+.fn-matrix { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 12px; }
+.fn-matrix th, .fn-matrix td {
+  border-bottom: 1.5px solid var(--rule); padding: 6px 8px; text-align: left; vertical-align: top;
+}
+.fn-matrix th { font-weight: 500; color: var(--ink-2); font-size: 11px; }
+.fn-matrix td.fn-mode { white-space: nowrap; }
+.fn-matrix .fn-tag {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  border: 1.5px solid var(--ink); padding: 1px 5px; display: inline-block;
+}
+.fn-matrix .fn-tag.on { background: var(--hi-bg); color: var(--hi-fg); border-color: var(--hi-bg); }
+
 /* Anything wide scrolls inside itself. The page body never scrolls sideways. */
 .fn-scroll { overflow-x: auto; }
 

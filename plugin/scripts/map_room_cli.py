@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Hand-operated side of The Map Room plugin — what the skill drives.
 
+    map_room_cli.py report <path> [<path>...]   report files this agent just looked at
     map_room_cli.py pending
     map_room_cli.py claim <request_id> [agent_name]
     map_room_cli.py complete <request_id> "findings"   (2-3 plain lines, newline separated)
@@ -47,6 +48,139 @@ def _require_repo(cfg) -> bool:
     else:
         print("Could not resolve a repo (%s). Nothing reported." % source)
     return False
+
+
+# --------------------------------------------------------------------------
+# self-reporting: the one-liner a cooperative agent calls itself
+# --------------------------------------------------------------------------
+#
+# Claude Code gets its touches from a PostToolUse hook -- the harness runs it,
+# the model has no say. Agents with no such hook have to report themselves, and
+# this is the whole interface they need:
+#
+#     map_room_cli.py report src/app.py tests/test_app.py
+#
+# Same reducer, same binding rules, same silence on an unindexed repo.
+
+SESSION_TTL = 4 * 60 * 60
+
+
+def _session_id(cfg) -> str:
+    """The session these touches belong to.
+
+    An explicit MAP_ROOM_SESSION always wins -- an agent that knows its own
+    session id (opencode, Codex) should pass it so the ?session= link matches
+    what the person sees in their terminal. Otherwise we mint one per checkout
+    and keep it for four hours, so a working session stays one route on the map
+    instead of fragmenting into a new dot per file.
+    """
+    explicit = (os.environ.get("MAP_ROOM_SESSION") or "").strip()
+    if explicit:
+        return explicit[:120]
+    import time
+    import uuid
+    path = os.path.join(m.state_root(), "session",
+                        m._safe_key(cfg["project_dir"], 120) + ".json")
+    now = time.time()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            cached = json.load(fh)
+        if cached.get("session") and now - float(cached.get("at") or 0) < SESSION_TTL:
+            cached["at"] = now
+            _write_json(path, cached)
+            return str(cached["session"])
+    except Exception:
+        pass
+    fresh = "%s-%s" % (cfg["agent_name"], uuid.uuid4().hex[:12])
+    _write_json(path, {"session": fresh, "at": now})
+    return fresh
+
+
+def _write_json(path: str, payload: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    except Exception:
+        pass
+
+
+def cmd_report(argv) -> int:
+    """report <path>... [--bash CMD] [--tool NAME] [--session ID] [--agent NAME] [--quiet]
+
+    `--bash` hands a whole shell command over to the same parser the Claude Code
+    hook uses, so an integration that sees `cat src/app.py` reports what was
+    actually read rather than nothing. Paths it is unsure about are dropped --
+    a missed touch leaves a region dark, an invented one lights the wrong one.
+    """
+    paths, tool, session, agent, quiet, bash = [], "Read", None, None, False, None
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--tool", "--session", "--agent", "--bash") and i + 1 < len(argv):
+            value = argv[i + 1]
+            if arg == "--tool":
+                tool = value
+            elif arg == "--session":
+                session = value
+            elif arg == "--bash":
+                bash = value
+            else:
+                agent = value
+            i += 2
+            continue
+        if arg == "--quiet":
+            quiet = True
+            i += 1
+            continue
+        paths.append(arg)
+        i += 1
+
+    if not paths and bash is None:
+        print("usage: map_room_cli.py report <path> [<path>...] "
+              "[--bash '<shell command>'] [--tool NAME] [--session ID]",
+              file=sys.stderr)
+        return 2
+
+    cfg = m.load_config()
+    if agent:
+        cfg["agent_name"] = agent
+    token = m.read_token()
+    m.bind_repo(cfg, token, allow_network=True)
+
+    if not cfg.get("repo_id"):
+        # Deliberate: an unindexed repo reports nothing rather than landing on
+        # somebody else's map. Say so once, then stay quiet.
+        if not quiet:
+            _require_repo(cfg)
+        return 0
+
+    if bash is not None:
+        paths = list(paths) + m.extract_bash_paths(bash, cfg["project_dir"])
+        if tool == "Read":
+            tool = "Bash"
+    rel = m.to_repo_relative(paths, cfg["project_dir"])
+    if not rel:
+        if not quiet:
+            print("Nothing to report -- no path was inside %s." % cfg["project_dir"])
+        return 0
+
+    session = session or _session_id(cfg)
+    out = m.report_touch(cfg, token, session, tool, rel)
+    text = str(out or "").strip()
+    if text.startswith("HTTP ") or text.startswith("ERROR:"):
+        if not quiet:
+            print("FAILED to report: %s" % text, file=sys.stderr)
+        return 1
+    if quiet:
+        return 0
+    print("Reported %d path%s to %s as %s."
+          % (len(rel), "" if len(rel) == 1 else "s", cfg.get("repo_slug") or cfg["repo_id"],
+             cfg["agent_name"]))
+    link = m.session_link(cfg, session)
+    if link and m.once("selflink", session):
+        print("Watch this session: %s" % link)
+    return 0
 
 
 def cmd_pending(argv) -> int:
@@ -222,6 +356,7 @@ def _report(what: str, out) -> int:
 
 
 COMMANDS = {
+    "report": cmd_report,
     "pending": cmd_pending,
     "claim": cmd_claim,
     "complete": cmd_complete,

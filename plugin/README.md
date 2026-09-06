@@ -141,6 +141,17 @@ about 100 ms, the same as before.
 `Bash` *output* is never scanned. A `find` or a `grep -r` would name hundreds of
 files the agent never actually looked at.
 
+## Not using Claude Code?
+
+Codex, Cursor and opencode all have their own hook mechanisms, and all three are
+wired up in [`agents/`](agents/README.md) — one command each, same transport, no
+reimplementation. That README also states plainly which integrations are
+*enforced* by the tool and which are *cooperative*.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Piyush-sahoo/spacetime-hacks/main/plugin/agents/install.sh | sh -s -- codex
+```
+
 ## Install
 
 Requires Python 3 (standard library only — no pip install) and a SpacetimeDB
