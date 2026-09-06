@@ -25,7 +25,7 @@ DEFAULT_HOST = "https://maincloud.spacetimedb.com"
 DEFAULT_DB = "map-room"
 # Where the map is watched. Overridable so a fork or a local `vite dev` prints
 # its own links instead of the hosted ones.
-DEFAULT_SITE = "https://map-room-piyushs-projects-4db92eb5.vercel.app"
+DEFAULT_SITE = "https://map-room-beta.vercel.app"
 # There is deliberately NO default repo id. An unbound checkout reports nothing
 # rather than dumping its file reads onto somebody else's map.
 DEFAULT_REPO_ID = None
