@@ -641,7 +641,8 @@ function SetupPrompt({ slug, base }) {
         <Copy text={text} title="the setup instruction" />
       </div>
 
-      <table className="fn-matrix fn-scroll">
+      <div className="fn-scroll">
+      <table className="fn-matrix">
         <thead>
           <tr><th>Agent</th><th>How it reports</th><th>What actually fires</th></tr>
         </thead>
@@ -662,6 +663,7 @@ function SetupPrompt({ slug, base }) {
           ))}
         </tbody>
       </table>
+      </div>
       <p className="fn-why" style={{ marginTop: 0 }}>
         <strong>Enforced</strong> means the tool itself runs the reporting
         command on every matching tool call — the model is not asked and cannot
