@@ -580,12 +580,19 @@ Live map:   ${base}
      instruction file your tool has. If it has none, follow that file and call
      the report command yourself after you read files.
 
-3. Verify. From the root of this repository:
-     python3 ~/.map-room/map_room_cli.py doctor
-   On Claude Code the plugin brings its own copy, so run instead:
-     python3 "$(ls -d ~/.claude/plugins/cache/map-room/map-room/*/scripts/map_room_cli.py | tail -1)" doctor
+3. Verify. On Claude Code, do NOT run anything — the hook prints a line at the
+   top of your next turn:
+     [The Map Room] this session: https://.../?repo=${slug}&session=<uuid>
+   That line only appears when the repository is bound, so seeing it IS the
+   check. If you have it, skip to step 4.
 
+   No line, or another agent? From the root of this repository:
+     python3 ~/.map-room/map_room_cli.py doctor
    Good: repo_id has a number, repo_slug is ${slug}, token says found.
+
+   If your sandbox refuses to run that command, do not spend time working
+   around it — go to step 4 instead. A row landing is a better proof than a
+   diagnostic anyway.
 
    repo_id : UNBOUND is not a bug. A repository nobody has indexed reports
    NOTHING, deliberately — there is no default map to fall back to. Fix it by
